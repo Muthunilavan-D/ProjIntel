@@ -1,0 +1,15 @@
+{
+  "name": "ai-assisted-academic-project-management-system",
+  "version": "1.0.0",
+  "description": "PROJINTEL - AI-Assisted Academic Project Management System",
+  "scripts": {
+    "start": "node server/server.js",
+    "server": "npm run start --prefix server",
+    "client": "npm run dev --prefix client",
+    "seed": "npm run seed --prefix server",
+    "build": "npm run build --prefix client"
+  },
+  "keywords": ["academic", "project-management", "ai", "react", "express", "mongodb"],
+  "author": "",
+  "license": "ISC"
+}

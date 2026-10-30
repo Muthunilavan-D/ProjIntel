@@ -1,0 +1,18 @@
+4. Login Credentials
+🛡️ System Administrators (admins table)
+Name	Email / Login	Password	Table	Role
+System Admin	muthunilavand555@gmail.com	admin123	admins	ADMIN
+👨‍🏫 Faculty Guides (faculties table)
+Name	Staff ID	Email / Login	Password	Table	Department
+Dr. A. Sharma (HOD)	FAC-101	guide@vcet.edu.in	password123	faculties	CSE (Quick Login)
+Dr. A. Sharma (HOD)	FAC-102	sharma@vcet.edu.in	password123	faculties	CSE
+Prof. R. Venkatesh	FAC-103	venkatesh@vcet.edu.in	password123	faculties	IT
+Dr. M. Lakshmi	FAC-104	lakshmi@vcet.edu.in	password123	faculties	AI&DS
+Prof. K. Anand	FAC-105	anand.faculty@vcet.edu.in	password123	faculties	ECE
+🎓 Students & Team Leads (students table)
+Student Name	Register No	Email / Login	Password	Table	Associated Project
+Kishore T S	913121104001	student@vcet.edu.in	password123	students	PROJ-01 (AI Platform - Approved)
+Anand M	913121106012	anand@vcet.edu.in	password123	students	PROJ-02 (IoT Agriculture - Approved)
+Rohan S	913121104042	rohan@vcet.edu.in	password123	students	PROJ-03 (Vision Health - Under Review)
+Meena K	913121105018	meena@vcet.edu.in	password123	students	PROJ-04 (Blockchain EHR - Revision Req.)
+(Team members praveen@vcet.edu.in, sanjay@vcet.edu.in, bala@vcet.edu.in, chandran@vcet.edu.in, kavya@vcet.edu.in, deepak@vcet.edu.in, siddharth@vcet.edu.in, ananya@vcet.edu.in are also seeded in students with password password123).
