@@ -36,6 +36,18 @@ function App() {
   const [departmentsList, setDepartmentsList] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
+  const [loadingElapsed, setLoadingElapsed] = useState(0);
+
+  useEffect(() => {
+    let timer;
+    if (dataLoading) {
+      setLoadingElapsed(0);
+      timer = setInterval(() => setLoadingElapsed(prev => prev + 1), 1000);
+    } else {
+      setLoadingElapsed(0);
+    }
+    return () => clearInterval(timer);
+  }, [dataLoading]);
   const [systemSettings, setSystemSettings] = useState({
     currentAcademicYear: '2026-2027',
     availableBatches: ['2023-2027', '2024-2028', '2025-2029', '2026-2030']
@@ -62,6 +74,10 @@ function App() {
   const loadAllData = useCallback(async (loggedUser, isSilent = false) => {
     if (!loggedUser) return;
     if (!isSilent) setDataLoading(true);
+    const safetyFallbackTimer = setTimeout(() => {
+      clearTimeout(safetyFallbackTimer);
+      if (!isSilent) setDataLoading(false);
+    }, 45000);
     try {
       try {
         const sRes = await getSystemSettings();
