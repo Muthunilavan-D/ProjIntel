@@ -1488,7 +1488,7 @@ function App() {
 
               {activeView !== 'guidelines' && (
                 <>
-                  {dataLoading && projectsList.length === 0 ? (
+                  {dataLoading && projectsList.length === 0 && userRole !== "Student" ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '1rem' }}>
                       <ProjIntelSpinner size="xl" label="Loading project workspace from MongoDB Atlas..." />
                     </div>
@@ -1648,7 +1648,6 @@ function App() {
                                   onOpenNewProject={() => setIsNewProjectOpen(true)}
                                   onTeamFormed={(team) => {
                                     setMyTeam(team);
-                                    loadAllData(user);
                                   }}
                                   onRefreshUser={() => loadAllData(user)}
                                 />

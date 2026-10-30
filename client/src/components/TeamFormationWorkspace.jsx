@@ -101,6 +101,12 @@ const TeamFormationWorkspace = ({ user, onOpenNewProject, onTeamFormed, onRefres
 
   // Load all team-related data
   const loadTeamData = async (isManualSync = false) => {
+    // Safety timer to prevent stuck spinner
+    const timer = setTimeout(() => {
+      clearTimeout(timer);
+      setLoading(false);
+      setSyncing(false);
+    }, 8000);
     if (isManualSync) setSyncing(true);
     else setLoading(true);
     setErrorMessage(null);
@@ -116,9 +122,7 @@ const TeamFormationWorkspace = ({ user, onOpenNewProject, onTeamFormed, onRefres
       if (teamRes.success) {
         setMyTeam(teamRes.data);
         setIsLeader(!!teamRes.isLeader);
-        if (teamRes.data?.status === 'FORMED' && onTeamFormed) {
-          onTeamFormed(teamRes.data);
-        }
+
       }
 
       if (invitesRes.success && Array.isArray(invitesRes.data)) {
