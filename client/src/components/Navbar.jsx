@@ -98,7 +98,7 @@ const Navbar = ({
                 style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#818CF8', borderColor: 'rgba(99, 102, 241, 0.25)' }}
               >
                 <KeyRound size={14} />
-                <span className="logout-text">{user?.role === 'Admin' ? 'Security' : 'Password'}</span>
+                <span className="logout-text">{(user?.role === 'Admin' || user?.role === 'Faculty') ? 'Security' : 'Password'}</span>
               </button>
 
               <button 

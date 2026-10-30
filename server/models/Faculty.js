@@ -50,6 +50,38 @@ const FacultySchema = new mongoose.Schema({
   maxProjects: {
     type: Number,
     default: 2
+  },
+  // Secure Email Change Verification
+  pendingEmail: {
+    type: String,
+    lowercase: true,
+    trim: true,
+    default: null
+  },
+  emailVerificationOtp: {
+    type: String,
+    default: null
+  },
+  emailVerificationToken: {
+    type: String,
+    default: null
+  },
+  emailVerificationExpires: {
+    type: Date,
+    default: null
+  },
+  // Password Reset OTP and Token
+  resetPasswordOtp: {
+    type: String,
+    default: null
+  },
+  resetPasswordToken: {
+    type: String,
+    default: null
+  },
+  resetPasswordExpires: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true

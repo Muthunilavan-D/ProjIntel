@@ -1434,6 +1434,20 @@ function App() {
           user={user}
           onOpenLogin={handleOpenLogin}
           onLogout={handleLogout}
+          onUserUpdate={(updatedUser) => {
+            const normalized = {
+              ...user,
+              ...updatedUser,
+              role: ['FACULTY', 'Faculty', 'GUIDE', 'Guide'].includes(String(updatedUser.role || user?.role || '').trim())
+                ? 'Faculty'
+                : ['ADMIN', 'Admin'].includes(String(updatedUser.role || user?.role || '').trim())
+                ? 'Admin'
+                : 'Student'
+            };
+            setUser(normalized);
+            loadAllData(normalized);
+            showToast(`Profile updated: Institutional email verified as ${normalized.email}`);
+          }}
         />
 
         {/* Main Content View */}

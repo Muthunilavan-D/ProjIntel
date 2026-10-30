@@ -38,8 +38,16 @@ export async function resetPassword({ email, otp, resetToken, newPassword }) {
   return api.post("/auth/reset-password", { email, otp, resetToken, newPassword });
 }
 
+export async function requestEmailChange(newEmail, currentPassword) {
+  try {
+    return await api.post("/auth/request-email-change", { newEmail, currentPassword });
+  } catch (err) {
+    return await api.post("/auth/admin/request-email-change", { newEmail, currentPassword });
+  }
+}
+
 export async function requestAdminEmailChange(newEmail, currentPassword) {
-  return api.post("/auth/admin/request-email-change", { newEmail, currentPassword });
+  return requestEmailChange(newEmail, currentPassword);
 }
 
 export async function verifyEmailToken(tokenOrPayload) {

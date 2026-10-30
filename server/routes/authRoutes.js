@@ -301,21 +301,27 @@ router.post("/change-password", protect, async (req, res) => {
   }
 });
 
-// POST /api/auth/forgot-password — Request Password Reset OTP & Token
+// POST /api/auth/forgot-password — Request Password Reset OTP & Token (Admin or Faculty)
 router.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
-      return res.status(400).json({ success: false, error: "Please enter your administrative email address." });
+      return res.status(400).json({ success: false, error: "Please enter your email address." });
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const admin = await Admin.findOne({ email: cleanEmail });
+    let account = await Admin.findOne({ email: cleanEmail });
+    let accountRole = "ADMIN";
 
-    if (!admin) {
+    if (!account) {
+      account = await Faculty.findOne({ email: cleanEmail });
+      if (account) accountRole = "FACULTY";
+    }
+
+    if (!account) {
       return res.status(404).json({
         success: false,
-        error: "No administrator account found with this email address. Please verify your email."
+        error: "No administrator or faculty account found with this email address. Please verify your email."
       });
     }
 
@@ -324,15 +330,15 @@ router.post("/forgot-password", async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString("hex");
     const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    admin.resetPasswordOtp = otp;
-    admin.resetPasswordToken = resetToken;
-    admin.resetPasswordExpires = expires;
-    await admin.save();
+    account.resetPasswordOtp = otp;
+    account.resetPasswordToken = resetToken;
+    account.resetPasswordExpires = expires;
+    await account.save();
 
     const clientBaseUrl = req.headers.origin || "http://localhost:5173";
     const emailResult = await sendPasswordResetOtp({
-      toEmail: admin.email,
-      name: admin.name,
+      toEmail: account.email,
+      name: account.name,
       otp,
       resetToken,
       clientBaseUrl
@@ -340,8 +346,9 @@ router.post("/forgot-password", async (req, res) => {
 
     res.json({
       success: true,
-      message: `A 6-digit verification code and reset link have been dispatched to ${admin.email}.`,
-      email: admin.email,
+      message: `A 6-digit verification code and reset link have been dispatched to ${account.email}.`,
+      email: account.email,
+      role: accountRole,
       deliveredLive: emailResult.deliveredLive,
       devOtp: (!emailResult.deliveredLive && process.env.NODE_ENV !== "production") ? otp : undefined,
       resetToken: process.env.NODE_ENV !== "production" ? resetToken : undefined
@@ -352,7 +359,7 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
-// POST /api/auth/verify-reset-otp — Validate 6-digit OTP code
+// POST /api/auth/verify-reset-otp — Validate 6-digit OTP code (Admin or Faculty)
 router.post("/verify-reset-otp", async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -363,13 +370,21 @@ router.post("/verify-reset-otp", async (req, res) => {
     const cleanEmail = email.toLowerCase().trim();
     const cleanOtp = otp.toString().trim();
 
-    const admin = await Admin.findOne({
+    let account = await Admin.findOne({
       email: cleanEmail,
       resetPasswordOtp: cleanOtp,
       resetPasswordExpires: { $gt: new Date() }
     });
 
-    if (!admin) {
+    if (!account) {
+      account = await Faculty.findOne({
+        email: cleanEmail,
+        resetPasswordOtp: cleanOtp,
+        resetPasswordExpires: { $gt: new Date() }
+      });
+    }
+
+    if (!account) {
       return res.status(400).json({
         success: false,
         error: "Invalid or expired verification code. Please check your code or request a new one."
@@ -379,7 +394,7 @@ router.post("/verify-reset-otp", async (req, res) => {
     res.json({
       success: true,
       message: "Verification code verified successfully.",
-      resetToken: admin.resetPasswordToken
+      resetToken: account.resetPasswordToken
     });
   } catch (err) {
     console.error("POST /api/auth/verify-reset-otp error:", err);
@@ -387,7 +402,7 @@ router.post("/verify-reset-otp", async (req, res) => {
   }
 });
 
-// POST /api/auth/reset-password — Complete Password Reset (by OTP or Token)
+// POST /api/auth/reset-password — Complete Password Reset (by OTP or Token for Admin/Faculty)
 router.post("/reset-password", async (req, res) => {
   try {
     const { email, otp, resetToken, newPassword } = req.body;
@@ -395,25 +410,38 @@ router.post("/reset-password", async (req, res) => {
       return res.status(400).json({ success: false, error: "New password must be at least 6 characters long." });
     }
 
-    let admin = null;
+    let account = null;
     const now = new Date();
 
     if (resetToken) {
-      admin = await Admin.findOne({
+      account = await Admin.findOne({
         resetPasswordToken: resetToken.trim(),
         resetPasswordExpires: { $gt: now }
       });
+      if (!account) {
+        account = await Faculty.findOne({
+          resetPasswordToken: resetToken.trim(),
+          resetPasswordExpires: { $gt: now }
+        });
+      }
     }
 
-    if (!admin && email && otp) {
-      admin = await Admin.findOne({
+    if (!account && email && otp) {
+      account = await Admin.findOne({
         email: email.toLowerCase().trim(),
         resetPasswordOtp: otp.toString().trim(),
         resetPasswordExpires: { $gt: now }
       });
+      if (!account) {
+        account = await Faculty.findOne({
+          email: email.toLowerCase().trim(),
+          resetPasswordOtp: otp.toString().trim(),
+          resetPasswordExpires: { $gt: now }
+        });
+      }
     }
 
-    if (!admin) {
+    if (!account) {
       return res.status(400).json({
         success: false,
         error: "Password reset session has expired or is invalid. Please request a new verification code."
@@ -421,11 +449,11 @@ router.post("/reset-password", async (req, res) => {
     }
 
     const salt = await bcrypt.genSalt(10);
-    admin.password = await bcrypt.hash(newPassword.trim(), salt);
-    admin.resetPasswordOtp = null;
-    admin.resetPasswordToken = null;
-    admin.resetPasswordExpires = null;
-    await admin.save();
+    account.password = await bcrypt.hash(newPassword.trim(), salt);
+    account.resetPasswordOtp = null;
+    account.resetPasswordToken = null;
+    account.resetPasswordExpires = null;
+    await account.save();
 
     res.json({
       success: true,
@@ -437,8 +465,8 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
-// POST /api/auth/admin/request-email-change — Initiate Admin Email Change with Verification Link
-router.post("/admin/request-email-change", protect, async (req, res) => {
+// Helper for email change request (Admin or Faculty)
+async function handleRequestEmailChange(req, res) {
   try {
     const { newEmail, currentPassword } = req.body;
     if (!newEmail || !currentPassword) {
@@ -451,29 +479,38 @@ router.post("/admin/request-email-change", protect, async (req, res) => {
       return res.status(400).json({ success: false, error: "Please enter a valid email address." });
     }
 
-    if (req.user.role !== "ADMIN") {
-      return res.status(403).json({ success: false, error: "Only administrators can modify institutional email governance." });
+    const userRole = (req.user.role || "").toUpperCase();
+    if (userRole !== "ADMIN" && userRole !== "FACULTY") {
+      return res.status(403).json({ success: false, error: "Only administrators and faculty can modify institutional email." });
     }
 
-    const admin = await Admin.findById(req.user.id);
-    if (!admin) {
-      return res.status(404).json({ success: false, error: "Administrator record not found." });
+    let userAccount = null;
+    if (userRole === "ADMIN") {
+      userAccount = await Admin.findById(req.user.id);
+    } else if (userRole === "FACULTY") {
+      userAccount = await Faculty.findById(req.user.id);
     }
 
-    if (admin.email === cleanNewEmail) {
+    if (!userAccount) {
+      return res.status(404).json({ success: false, error: "User account record not found." });
+    }
+
+    if (userAccount.email === cleanNewEmail) {
       return res.status(400).json({ 
         success: false, 
-        error: `Your administrator email is already registered and verified as ${admin.email}.`,
-        currentEmail: admin.email 
+        error: `Your institutional email is already registered and verified as ${userAccount.email}.`,
+        currentEmail: userAccount.email 
       });
     }
 
-    // Verify current admin password
-    let isMatch = await bcrypt.compare(currentPassword, admin.password);
-    if (!isMatch && (currentPassword === 'admin123' || currentPassword === 'Admin123')) {
-      isMatch = (await bcrypt.compare('admin123', admin.password)) || (await bcrypt.compare('Admin123', admin.password));
+    // Verify current password
+    let isMatch = await bcrypt.compare(currentPassword, userAccount.password);
+    if (!isMatch && (currentPassword === 'admin123' || currentPassword === 'Admin123' || currentPassword === 'password123')) {
+      isMatch = (await bcrypt.compare('admin123', userAccount.password)) || 
+                (await bcrypt.compare('Admin123', userAccount.password)) ||
+                (await bcrypt.compare('password123', userAccount.password));
     }
-    if (!isMatch && admin.password !== currentPassword) {
+    if (!isMatch && userAccount.password !== currentPassword) {
       return res.status(400).json({ success: false, error: "Current password does not match. Authorization denied." });
     }
 
@@ -488,17 +525,17 @@ router.post("/admin/request-email-change", protect, async (req, res) => {
     const verificationOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    admin.pendingEmail = cleanNewEmail;
-    admin.emailVerificationOtp = verificationOtp;
-    admin.emailVerificationToken = verificationToken;
-    admin.emailVerificationExpires = expires;
-    await admin.save();
+    userAccount.pendingEmail = cleanNewEmail;
+    userAccount.emailVerificationOtp = verificationOtp;
+    userAccount.emailVerificationToken = verificationToken;
+    userAccount.emailVerificationExpires = expires;
+    await userAccount.save();
 
     const clientBaseUrl = req.headers.origin || "http://localhost:5173";
     const emailResult = await sendEmailChangeVerification({
       newEmail: cleanNewEmail,
-      currentEmail: admin.email,
-      name: admin.name,
+      currentEmail: userAccount.email,
+      name: userAccount.name,
       verificationToken,
       verificationOtp,
       clientBaseUrl
@@ -506,19 +543,23 @@ router.post("/admin/request-email-change", protect, async (req, res) => {
 
     res.json({
       success: true,
-      message: `A verification link has been sent to ${cleanNewEmail}. Please click the link to confirm the email change.`,
+      message: `A verification link has been sent to ${cleanNewEmail}. Please click the link or enter the OTP to confirm the email change.`,
       pendingEmail: cleanNewEmail,
       deliveredLive: emailResult.deliveredLive,
       devVerifyLink: (!emailResult.deliveredLive && process.env.NODE_ENV !== "production") ? emailResult.verifyLink : undefined,
       verificationToken: (!emailResult.deliveredLive && process.env.NODE_ENV !== "production") ? verificationToken : undefined
     });
   } catch (err) {
-    console.error("POST /api/auth/admin/request-email-change error:", err);
+    console.error("request-email-change error:", err);
     res.status(500).json({ success: false, error: "Failed to process email change request." });
   }
-});
+}
 
-// ALL /api/auth/verify-email — Complete Email Verification via Token or 6-digit OTP
+// POST /api/auth/request-email-change — Initiate Email Change (Admin or Faculty)
+router.post("/request-email-change", protect, handleRequestEmailChange);
+router.post("/admin/request-email-change", protect, handleRequestEmailChange);
+
+// ALL /api/auth/verify-email — Complete Email Verification via Token or 6-digit OTP (Admin or Faculty)
 router.all("/verify-email", async (req, res) => {
   try {
     const token = (req.query.token || req.body.token || "").toString().trim();
@@ -529,12 +570,25 @@ router.all("/verify-email", async (req, res) => {
       return res.status(400).json({ success: false, error: "Verification token or 6-digit OTP code is required." });
     }
 
-    let admin = null;
+    let userAccount = null;
+    let accountRole = "ADMIN";
+    let accountModel = "Admin";
+
     if (token) {
-      admin = await Admin.findOne({
+      userAccount = await Admin.findOne({
         emailVerificationToken: token,
         emailVerificationExpires: { $gt: new Date() }
       });
+      if (!userAccount) {
+        userAccount = await Faculty.findOne({
+          emailVerificationToken: token,
+          emailVerificationExpires: { $gt: new Date() }
+        });
+        if (userAccount) {
+          accountRole = "FACULTY";
+          accountModel = "Faculty";
+        }
+      }
     } else if (otp) {
       const query = {
         emailVerificationOtp: otp,
@@ -543,48 +597,55 @@ router.all("/verify-email", async (req, res) => {
       if (email) {
         query.pendingEmail = email;
       }
-      admin = await Admin.findOne(query);
+      userAccount = await Admin.findOne(query);
+      if (!userAccount) {
+        userAccount = await Faculty.findOne(query);
+        if (userAccount) {
+          accountRole = "FACULTY";
+          accountModel = "Faculty";
+        }
+      }
     }
 
-    if (!admin || !admin.pendingEmail) {
+    if (!userAccount || !userAccount.pendingEmail) {
       return res.status(400).json({
         success: false,
         error: "Verification code/link is invalid, has expired, or has already been used. Please request a new verification."
       });
     }
 
-    const previousEmail = admin.email;
-    const verifiedEmail = admin.pendingEmail;
+    const previousEmail = userAccount.email;
+    const verifiedEmail = userAccount.pendingEmail;
 
-    admin.email = verifiedEmail;
-    admin.pendingEmail = null;
-    admin.emailVerificationOtp = null;
-    admin.emailVerificationToken = null;
-    admin.emailVerificationExpires = null;
-    await admin.save();
+    userAccount.email = verifiedEmail;
+    userAccount.pendingEmail = null;
+    userAccount.emailVerificationOtp = null;
+    userAccount.emailVerificationToken = null;
+    userAccount.emailVerificationExpires = null;
+    await userAccount.save();
 
     // Issue refreshed token for the updated email
     const payload = {
-      id: admin._id.toString(),
-      role: "ADMIN",
-      model: "Admin",
-      name: admin.name,
-      email: admin.email
+      id: userAccount._id.toString(),
+      role: accountRole,
+      model: accountModel,
+      name: userAccount.name,
+      email: userAccount.email
     };
     const newToken = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 
-    console.log(`[EMAIL VERIFIED] Admin email successfully updated from ${previousEmail} to ${verifiedEmail}`);
+    console.log(`[EMAIL VERIFIED] ${accountRole} email successfully updated from ${previousEmail} to ${verifiedEmail}`);
 
     res.json({
       success: true,
-      message: `Success! Administrator email has been securely updated and verified as ${verifiedEmail}.`,
+      message: `Success! ${accountRole === 'ADMIN' ? 'Administrator' : 'Faculty'} email has been securely updated and verified as ${verifiedEmail}.`,
       token: newToken,
       user: {
-        id: admin._id,
-        name: admin.name,
+        id: userAccount._id,
+        name: userAccount.name,
         email: verifiedEmail,
-        role: "Admin",
-        model: "Admin"
+        role: accountRole === 'ADMIN' ? 'Admin' : 'Faculty',
+        model: accountModel
       }
     });
   } catch (err) {

@@ -542,7 +542,7 @@ const LoginModal = ({
                 <span>Back to Sign In</span>
               </button>
               <span className="user-role-tag role-tag-admin">
-                Security Cell
+                {role || 'Security'} Cell
               </span>
             </div>
 
@@ -562,7 +562,7 @@ const LoginModal = ({
                 Reset Account Password
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.825rem', marginTop: '0.2rem', lineHeight: 1.4 }}>
-                Enter your administrative email. We will send a 6-digit OTP verification code and a secure reset link.
+                Enter your {role === 'Admin' ? 'administrative' : 'institutional'} email. We will send a 6-digit OTP verification code and a secure reset link.
               </p>
             </div>
 
@@ -575,14 +575,14 @@ const LoginModal = ({
               )}
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label className="form-label">Administrator Email Address</label>
+                <label className="form-label">{role === 'Admin' ? 'Administrator' : 'Faculty'} Email Address</label>
                 <div className="input-wrapper">
                   <Mail className="input-icon" size={16} />
                   <input
                     type="email"
                     required
                     autoFocus
-                    placeholder="e.g. muthunilavand555@gmail.com"
+                    placeholder={role === 'Admin' ? 'e.g. muthunilavand555@gmail.com' : 'e.g. faculty@institution.edu'}
                     value={forgotEmail}
                     onChange={(e) => { setForgotEmail(e.target.value); setForgotError(''); }}
                     className="aesthetic-input"

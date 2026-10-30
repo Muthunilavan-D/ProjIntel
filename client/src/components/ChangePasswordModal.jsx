@@ -14,12 +14,15 @@ import {
   ExternalLink,
   ShieldAlert
 } from 'lucide-react';
-import { changePassword, requestAdminEmailChange, verifyEmailToken, saveToken, getMe } from '../services/authService';
+import { changePassword, requestEmailChange, requestAdminEmailChange, verifyEmailToken, saveToken, getMe } from '../services/authService';
 
 const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) => {
   if (!isOpen) return null;
 
   const isAdmin = user?.role === 'Admin' || user?.role === 'ADMIN';
+  const isFaculty = user?.role === 'Faculty' || user?.role === 'FACULTY' || user?.role === 'Guide';
+  const canManageEmail = isAdmin || isFaculty;
+  const roleTitle = isAdmin ? 'Administrator' : 'Faculty';
 
   const [activeTab, setActiveTab] = useState('password'); // 'password' | 'email'
 
@@ -126,7 +129,7 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
 
     setEmailLoading(true);
     try {
-      const res = await requestAdminEmailChange(newEmail.trim().toLowerCase(), emailAuthPassword);
+      const res = await requestEmailChange(newEmail.trim().toLowerCase(), emailAuthPassword);
       if (res && res.success) {
         setEmailSuccess(res.message || 'Verification code and link dispatched successfully!');
         setPendingVerificationInfo({
@@ -172,7 +175,7 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
         email: targetEmail
       });
       if (res && res.success) {
-        setEmailSuccess(res.message || 'Administrator email successfully updated!');
+        setEmailSuccess(res.message || `${roleTitle} email successfully updated!`);
         if (res.token) saveToken(res.token);
         if (res.user) {
           setCurrentAdminEmail(res.user.email);
@@ -225,8 +228,8 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
           </button>
         </div>
 
-        {/* Tab Switcher (For Admins) */}
-        {isAdmin && (
+        {/* Tab Switcher (For Admin & Faculty) */}
+        {canManageEmail && (
           <div style={{ display: 'flex', background: 'var(--bg-glass)', borderBottom: '1px solid var(--border-color)', padding: '0.35rem 0.65rem', gap: '0.35rem' }}>
             <button
               type="button"
@@ -244,7 +247,7 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
               style={{ flex: 1, height: '34px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', borderRadius: '8px' }}
             >
               <Mail size={14} />
-              <span>Admin Email</span>
+              <span>{isAdmin ? 'Admin Email' : 'Faculty Email'}</span>
             </button>
           </div>
         )}
@@ -373,8 +376,8 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
           </form>
         )}
 
-        {/* TAB 2: ADMIN EMAIL GOVERNANCE (Admin Only) */}
-        {activeTab === 'email' && isAdmin && (
+        {/* TAB 2: EMAIL GOVERNANCE (Admin & Faculty) */}
+        {activeTab === 'email' && canManageEmail && (
           <div style={{ padding: '1.25rem 1.5rem' }}>
             {emailError && (
               <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 'var(--radius-md)', padding: '0.65rem 0.85rem', fontSize: '0.8rem', color: '#EF4444', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -397,7 +400,7 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
                 <div style={{ background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem', marginBottom: '1.25rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
                     <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', fontWeight: 700 }}>
-                      Current Administrator Email
+                      Current {roleTitle} Email
                     </span>
                     <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: '4px', background: '#DCFCE7', color: '#15803D', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
                       Active & Verified
@@ -414,14 +417,14 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
                 {/* New Email Address */}
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
-                    New Administrator Email *
+                    New {roleTitle} Email *
                   </label>
                   <div className="input-wrapper">
                     <Mail className="input-icon" size={16} />
                     <input
                       type="email"
                       required
-                      placeholder="e.g. newadmin@gmail.com"
+                      placeholder={`e.g. new.${roleTitle.toLowerCase()}@gmail.com`}
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                       className="aesthetic-input"
