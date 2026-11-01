@@ -21,8 +21,7 @@ import {
 } from 'lucide-react';
 import ProjIntelSpinner from './ProjIntelSpinner';
 import DocumentPreviewModal, { downloadFileDirectly } from './DocumentPreviewModal';
-
-const API_BASE = '/api';
+import { getIeeeDetails, updateIeeeDetails, uploadIeeeDraft, uploadIeeeProof } from '../services/projectService';
 
 /** Helper to verify a document object has an actual uploaded file on the server */
 const hasValidFile = (fileObj) => {
@@ -124,6 +123,46 @@ const IEEEStudentSection = ({
     }
   }, [project]);
 
+  // On mount or when projectId changes, fetch fresh IEEE details from backend
+  useEffect(() => {
+    if (!projectId) return;
+    let isCancelled = false;
+
+    getIeeeDetails(projectId)
+      .then(res => {
+        if (!isCancelled && res && res.success && res.data) {
+          const details = res.data;
+          setPaperTitle(details.paperTitle || '');
+          setConferenceName(details.conferenceName || '');
+          setConferenceDate(details.conferenceDate ? details.conferenceDate.split('T')[0] : '');
+          setIsSubmitted(!!details.isSubmitted);
+          setIsAccepted(!!details.isAccepted);
+          setIsPublished(!!details.isPublished);
+
+          setLatestDraft(hasValidFile(details.latestDraft) ? details.latestDraft : null);
+          setPreviousDraft(hasValidFile(details.previousDraft) ? details.previousDraft : null);
+
+          setSubmissionProof(hasValidFile(details.submissionProof) ? details.submissionProof : null);
+          setAcceptanceProof(hasValidFile(details.acceptanceProof) ? details.acceptanceProof : null);
+          setPublicationProof(hasValidFile(details.publicationProof) ? details.publicationProof : null);
+
+          if (onUpdateProject && project) {
+            onUpdateProject({
+              ...project,
+              ieeeDetails: details
+            }, { silent: true, skipApi: true });
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Could not load fresh IEEE details:', err);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [projectId]);
+
   // Clean up timer on unmount
   useEffect(() => {
     return () => {
@@ -144,21 +183,12 @@ const IEEEStudentSection = ({
     };
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/projects/${projectId}/ieee`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data?.success && data?.data) {
+      const res = await updateIeeeDetails(projectId, payload);
+      if (res?.success && res?.data) {
         if (onUpdateProject && project) {
           onUpdateProject({
             ...project,
-            ieeeDetails: data.data
+            ieeeDetails: res.data
           }, { silent: true, skipApi: true });
         }
       }
@@ -169,7 +199,7 @@ const IEEEStudentSection = ({
 
   // Immediate toggle status handler with instant persistence to avoid polling reversion
   const handleToggleStatus = async (field, value) => {
-    if (isViewOnly) return;
+    if (isViewOnly || !projectId) return;
 
     if (field === 'isSubmitted') setIsSubmitted(value);
     if (field === 'isAccepted') setIsAccepted(value);
@@ -186,21 +216,12 @@ const IEEEStudentSection = ({
 
     // Persist immediately to server
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/projects/${projectId}/ieee`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(updatedPayload)
-      });
-      const data = await res.json();
-      if (data?.success && data?.data) {
+      const res = await updateIeeeDetails(projectId, updatedPayload);
+      if (res?.success && res?.data) {
         if (onUpdateProject && project) {
           onUpdateProject({
             ...project,
-            ieeeDetails: data.data
+            ieeeDetails: res.data
           }, { silent: true, skipApi: true });
         }
       }
@@ -245,7 +266,7 @@ const IEEEStudentSection = ({
   // Handle saving text fields and toggles
   const handleSaveDetails = async (e) => {
     if (e) e.preventDefault();
-    if (isViewOnly) return;
+    if (isViewOnly || !projectId) return;
     setIsSaving(true);
     setErrorMessage(null);
     setSaveSuccessMessage(null);
@@ -260,31 +281,20 @@ const IEEEStudentSection = ({
     };
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/projects/${projectId}/ieee`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (data && data.success) {
+      const res = await updateIeeeDetails(projectId, payload);
+      if (res && res.success) {
         setSaveSuccessMessage('Details saved.');
-        if (onUpdateProject) {
+        if (onUpdateProject && project) {
           onUpdateProject({
             ...project,
-            ieeeDetails: data.data
+            ieeeDetails: res.data
           });
         }
       } else {
-        throw new Error(data?.error || 'Failed to save IEEE details.');
+        throw new Error(res?.error || 'Failed to save IEEE details.');
       }
     } catch (err) {
-      console.warn('PUT /api/projects/:id/ieee failed, updating local state:', err);
-      // Fallback update for mock / offline presentation mode
+      console.warn('updateIeeeDetails error, updating local state:', err);
       const updatedIeee = {
         ...(project?.ieeeDetails || {}),
         ...payload,
@@ -295,13 +305,13 @@ const IEEEStudentSection = ({
         publicationProof,
         updatedAt: new Date().toISOString()
       };
-      if (onUpdateProject) {
+      if (onUpdateProject && project) {
         onUpdateProject({
           ...project,
           ieeeDetails: updatedIeee
         });
       }
-      setSaveSuccessMessage('Details saved.');
+      setErrorMessage(err.message || 'Failed to save IEEE details.');
     } finally {
       setIsSaving(false);
     }
@@ -329,60 +339,23 @@ const IEEEStudentSection = ({
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/projects/${projectId}/ieee/draft`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: formData
-      });
-
-      const data = await res.json();
-      if (data && data.success) {
-        setLatestDraft(hasValidFile(data.data.latestDraft) ? data.data.latestDraft : null);
-        setPreviousDraft(hasValidFile(data.data.previousDraft) ? data.data.previousDraft : null);
+      const res = await uploadIeeeDraft(projectId, formData);
+      if (res && res.success) {
+        setLatestDraft(hasValidFile(res.data.latestDraft) ? res.data.latestDraft : null);
+        setPreviousDraft(hasValidFile(res.data.previousDraft) ? res.data.previousDraft : null);
         setSaveSuccessMessage('Draft uploaded.');
-        if (onUpdateProject) {
+        if (onUpdateProject && project) {
           onUpdateProject({
             ...project,
-            ieeeDetails: data.data
+            ieeeDetails: res.data
           });
         }
       } else {
-        throw new Error(data?.error || 'Failed to upload draft.');
+        throw new Error(res?.error || 'Failed to upload draft.');
       }
     } catch (err) {
-      console.warn('POST /draft failed, using mock draft shift:', err);
-      // Fallback draft shifting
-      const nextVer = (latestDraft?.version || 0) + 1;
-      const newPrevious = latestDraft ? { ...latestDraft } : null;
-      const newLatest = {
-        fileName: file.name,
-        originalName: file.name,
-        filePath: URL.createObjectURL(file),
-        fileSize: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-        uploadedAt: new Date().toISOString(),
-        version: nextVer
-      };
-      setPreviousDraft(newPrevious);
-      setLatestDraft(newLatest);
-
-      const updatedIeee = {
-        ...(project?.ieeeDetails || {}),
-        latestDraft: newLatest,
-        previousDraft: newPrevious,
-        paperTitle,
-        conferenceName,
-        conferenceDate,
-        isSubmitted,
-        isAccepted,
-        isPublished
-      };
-      if (onUpdateProject) {
-        onUpdateProject({ ...project, ieeeDetails: updatedIeee });
-      }
-      setSaveSuccessMessage('Draft uploaded.');
+      console.error('uploadIeeeDraft failed:', err);
+      setErrorMessage(err.message || 'Failed to upload draft.');
     } finally {
       setIsUploadingDraft(false);
       if (draftInputRef.current) draftInputRef.current.value = '';
@@ -403,18 +376,9 @@ const IEEEStudentSection = ({
     formData.append('proofType', proofType);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/projects/${projectId}/ieee/proof`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: formData
-      });
-
-      const data = await res.json();
-      if (data && data.success) {
-        const d = data.data;
+      const res = await uploadIeeeProof(projectId, formData);
+      if (res && res.success) {
+        const d = res.data;
         if (proofType === 'submission') {
           setSubmissionProof(hasValidFile(d.submissionProof) ? d.submissionProof : null);
           setIsSubmitted(true);
@@ -426,32 +390,15 @@ const IEEEStudentSection = ({
           setIsPublished(true);
         }
         setSaveSuccessMessage('Proof uploaded.');
-        if (onUpdateProject) {
+        if (onUpdateProject && project) {
           onUpdateProject({ ...project, ieeeDetails: d });
         }
       } else {
-        throw new Error(data?.error || 'Failed to upload proof document.');
+        throw new Error(res?.error || 'Failed to upload proof document.');
       }
     } catch (err) {
-      console.warn('POST /proof failed, using fallback:', err);
-      const mockDoc = {
-        fileName: file.name,
-        originalName: file.name,
-        filePath: URL.createObjectURL(file),
-        fileSize: `${(file.size / 1024).toFixed(1)} KB`,
-        uploadedAt: new Date().toISOString()
-      };
-      if (proofType === 'submission') {
-        setSubmissionProof(mockDoc);
-        setIsSubmitted(true);
-      } else if (proofType === 'acceptance') {
-        setAcceptanceProof(mockDoc);
-        setIsAccepted(true);
-      } else if (proofType === 'publication') {
-        setPublicationProof(mockDoc);
-        setIsPublished(true);
-      }
-      setSaveSuccessMessage('Proof uploaded.');
+      console.error('uploadIeeeProof failed:', err);
+      setErrorMessage(err.message || 'Failed to upload proof document.');
     } finally {
       setUploadingProofType(null);
       if (proofType === 'submission' && submissionProofInputRef.current) submissionProofInputRef.current.value = '';

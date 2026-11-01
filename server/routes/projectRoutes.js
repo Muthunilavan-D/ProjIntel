@@ -65,6 +65,17 @@ const uploadIeeeProof = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
+function handleUpload(uploadMiddleware) {
+  return (req, res, next) => {
+    uploadMiddleware(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ success: false, error: err.message || 'File upload failed' });
+      }
+      next();
+    });
+  };
+}
+
 // Comprehensive population configuration for projects
 const POPULATE_PROJECT = [
   { path: 'guide', select: 'name facultyId staffId email department' },
@@ -933,37 +944,51 @@ router.put('/:id/ieee', async (req, res) => {
     } = req.body;
 
     let project = null;
+    let updatedDetails = null;
+
     if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(req.params.id)) {
-      project = await Project.findById(req.params.id);
+      const updateFields = {
+        'ieeeDetails.updatedAt': new Date()
+      };
+      if (paperTitle !== undefined) updateFields['ieeeDetails.paperTitle'] = paperTitle;
+      if (conferenceName !== undefined) updateFields['ieeeDetails.conferenceName'] = conferenceName;
+      if (conferenceDate !== undefined) updateFields['ieeeDetails.conferenceDate'] = conferenceDate;
+      if (isSubmitted !== undefined) updateFields['ieeeDetails.isSubmitted'] = !!isSubmitted;
+      if (isAccepted !== undefined) updateFields['ieeeDetails.isAccepted'] = !!isAccepted;
+      if (isPublished !== undefined) updateFields['ieeeDetails.isPublished'] = !!isPublished;
+
+      project = await Project.findByIdAndUpdate(
+        req.params.id,
+        { $set: updateFields },
+        { new: true, runValidators: false }
+      );
+      if (project) {
+        updatedDetails = project.ieeeDetails;
+      }
     }
+
     if (!project) {
       project = mockProjects.find(p => p._id === req.params.id || p.id === req.params.id);
+      if (project) {
+        if (!project.ieeeDetails) project.ieeeDetails = {};
+        if (paperTitle !== undefined) project.ieeeDetails.paperTitle = paperTitle;
+        if (conferenceName !== undefined) project.ieeeDetails.conferenceName = conferenceName;
+        if (conferenceDate !== undefined) project.ieeeDetails.conferenceDate = conferenceDate;
+        if (isSubmitted !== undefined) project.ieeeDetails.isSubmitted = !!isSubmitted;
+        if (isAccepted !== undefined) project.ieeeDetails.isAccepted = !!isAccepted;
+        if (isPublished !== undefined) project.ieeeDetails.isPublished = !!isPublished;
+        project.ieeeDetails.updatedAt = new Date();
+        updatedDetails = project.ieeeDetails;
+      }
     }
 
     if (!project) {
       return res.status(404).json({ success: false, error: 'Project not found' });
     }
 
-    if (!project.ieeeDetails) {
-      project.ieeeDetails = {};
-    }
-
-    if (paperTitle !== undefined) project.ieeeDetails.paperTitle = paperTitle;
-    if (conferenceName !== undefined) project.ieeeDetails.conferenceName = conferenceName;
-    if (conferenceDate !== undefined) project.ieeeDetails.conferenceDate = conferenceDate;
-    if (isSubmitted !== undefined) project.ieeeDetails.isSubmitted = !!isSubmitted;
-    if (isAccepted !== undefined) project.ieeeDetails.isAccepted = !!isAccepted;
-    if (isPublished !== undefined) project.ieeeDetails.isPublished = !!isPublished;
-    project.ieeeDetails.updatedAt = new Date();
-
-    if (typeof project.save === 'function') {
-      project.markModified('ieeeDetails');
-      await project.save();
-    }
-
     res.json({
       success: true,
-      data: project.ieeeDetails,
+      data: updatedDetails || project.ieeeDetails,
       message: 'IEEE details updated successfully'
     });
   } catch (err) {
@@ -973,35 +998,40 @@ router.put('/:id/ieee', async (req, res) => {
 });
 
 // POST /api/projects/:id/ieee/draft — Upload new draft (advances latest to previous)
-router.post('/:id/ieee/draft', uploadIeeeDraft.single('file'), async (req, res) => {
+router.post('/:id/ieee/draft', handleUpload(uploadIeeeDraft.single('file')), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No document file uploaded' });
     }
 
     let project = null;
+    let existingIeee = null;
+
     if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(req.params.id)) {
       project = await Project.findById(req.params.id);
+      if (project) {
+        existingIeee = project.ieeeDetails || {};
+      }
     }
     if (!project) {
       project = mockProjects.find(p => p._id === req.params.id || p.id === req.params.id);
+      if (project) {
+        existingIeee = project.ieeeDetails || {};
+      }
     }
 
     if (!project) {
       return res.status(404).json({ success: false, error: 'Project not found' });
     }
 
-    if (!project.ieeeDetails) {
-      project.ieeeDetails = {};
-    }
-
-    const currentLatest = project.ieeeDetails.latestDraft;
+    const currentLatest = existingIeee?.latestDraft;
     let nextVersion = 1;
+    let previousDraft = existingIeee?.previousDraft || null;
 
     // Shift latest draft to previous draft if latest exists
     if (currentLatest && (currentLatest.fileName || currentLatest.filePath)) {
       nextVersion = (currentLatest.version || 1) + 1;
-      project.ieeeDetails.previousDraft = {
+      previousDraft = {
         fileName: currentLatest.fileName,
         originalName: currentLatest.originalName || currentLatest.fileName,
         filePath: currentLatest.filePath,
@@ -1011,7 +1041,7 @@ router.post('/:id/ieee/draft', uploadIeeeDraft.single('file'), async (req, res) 
       };
     }
 
-    project.ieeeDetails.latestDraft = {
+    const newLatestDraft = {
       fileName: req.file.filename,
       originalName: req.file.originalname,
       filePath: `/uploads/ieee/${req.file.filename}`,
@@ -1019,17 +1049,40 @@ router.post('/:id/ieee/draft', uploadIeeeDraft.single('file'), async (req, res) 
       uploadedAt: new Date(),
       version: nextVersion
     };
-    project.ieeeDetails.updatedAt = new Date();
 
-    if (typeof project.save === 'function') {
-      project.markModified('ieeeDetails');
-      await project.save();
+    const updateFields = {
+      'ieeeDetails.latestDraft': newLatestDraft,
+      'ieeeDetails.updatedAt': new Date()
+    };
+    if (previousDraft) {
+      updateFields['ieeeDetails.previousDraft'] = previousDraft;
     }
+
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(req.params.id)) {
+      const updated = await Project.findByIdAndUpdate(
+        req.params.id,
+        { $set: updateFields },
+        { new: true, runValidators: false }
+      );
+      if (updated) {
+        return res.json({
+          success: true,
+          data: updated.ieeeDetails,
+          message: `Draft v${nextVersion} uploaded successfully.`
+        });
+      }
+    }
+
+    // Mock fallback
+    if (!project.ieeeDetails) project.ieeeDetails = {};
+    if (previousDraft) project.ieeeDetails.previousDraft = previousDraft;
+    project.ieeeDetails.latestDraft = newLatestDraft;
+    project.ieeeDetails.updatedAt = new Date();
 
     res.json({
       success: true,
       data: project.ieeeDetails,
-      message: `Draft v${nextVersion} uploaded successfully. Previous draft retained.`
+      message: `Draft v${nextVersion} uploaded successfully.`
     });
   } catch (err) {
     console.error('POST /api/projects/:id/ieee/draft error:', err);
@@ -1038,7 +1091,7 @@ router.post('/:id/ieee/draft', uploadIeeeDraft.single('file'), async (req, res) 
 });
 
 // POST /api/projects/:id/ieee/proof — Upload proof document for submission, acceptance, or publication
-router.post('/:id/ieee/proof', uploadIeeeProof.single('file'), async (req, res) => {
+router.post('/:id/ieee/proof', handleUpload(uploadIeeeProof.single('file')), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No proof file uploaded' });
@@ -1052,22 +1105,6 @@ router.post('/:id/ieee/proof', uploadIeeeProof.single('file'), async (req, res) 
       });
     }
 
-    let project = null;
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(req.params.id)) {
-      project = await Project.findById(req.params.id);
-    }
-    if (!project) {
-      project = mockProjects.find(p => p._id === req.params.id || p.id === req.params.id);
-    }
-
-    if (!project) {
-      return res.status(404).json({ success: false, error: 'Project not found' });
-    }
-
-    if (!project.ieeeDetails) {
-      project.ieeeDetails = {};
-    }
-
     const proofData = {
       fileName: req.file.filename,
       originalName: req.file.originalname,
@@ -1075,6 +1112,43 @@ router.post('/:id/ieee/proof', uploadIeeeProof.single('file'), async (req, res) 
       fileSize: formatBytes(req.file.size),
       uploadedAt: new Date()
     };
+
+    const updateFields = {
+      'ieeeDetails.updatedAt': new Date()
+    };
+
+    if (proofType === 'submission') {
+      updateFields['ieeeDetails.submissionProof'] = proofData;
+      updateFields['ieeeDetails.isSubmitted'] = true;
+    } else if (proofType === 'acceptance') {
+      updateFields['ieeeDetails.acceptanceProof'] = proofData;
+      updateFields['ieeeDetails.isAccepted'] = true;
+    } else if (proofType === 'publication') {
+      updateFields['ieeeDetails.publicationProof'] = proofData;
+      updateFields['ieeeDetails.isPublished'] = true;
+    }
+
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(req.params.id)) {
+      const updated = await Project.findByIdAndUpdate(
+        req.params.id,
+        { $set: updateFields },
+        { new: true, runValidators: false }
+      );
+      if (updated) {
+        return res.json({
+          success: true,
+          data: updated.ieeeDetails,
+          message: `${proofType.charAt(0).toUpperCase() + proofType.slice(1)} proof uploaded successfully.`
+        });
+      }
+    }
+
+    // Mock fallback
+    let project = mockProjects.find(p => p._id === req.params.id || p.id === req.params.id);
+    if (!project) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    if (!project.ieeeDetails) project.ieeeDetails = {};
 
     if (proofType === 'submission') {
       project.ieeeDetails.submissionProof = proofData;
@@ -1086,13 +1160,7 @@ router.post('/:id/ieee/proof', uploadIeeeProof.single('file'), async (req, res) 
       project.ieeeDetails.publicationProof = proofData;
       project.ieeeDetails.isPublished = true;
     }
-
     project.ieeeDetails.updatedAt = new Date();
-
-    if (typeof project.save === 'function') {
-      project.markModified('ieeeDetails');
-      await project.save();
-    }
 
     res.json({
       success: true,

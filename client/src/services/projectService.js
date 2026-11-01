@@ -48,3 +48,20 @@ export async function completeProject(id, data = {}) {
 export async function reopenProject(id) {
   return api.put(`/projects/${id}/reopen`, {});
 }
+
+export async function getIeeeDetails(projectId) {
+  return api.get(`/projects/${projectId}/ieee`);
+}
+
+export async function updateIeeeDetails(projectId, data) {
+  return api.put(`/projects/${projectId}/ieee`, data);
+}
+
+export async function uploadIeeeDraft(projectId, formData) {
+  return api.postForm(`/projects/${projectId}/ieee/draft`, formData);
+}
+
+export async function uploadIeeeProof(projectId, formData) {
+  return api.postForm(`/projects/${projectId}/ieee/proof`, formData);
+}
+

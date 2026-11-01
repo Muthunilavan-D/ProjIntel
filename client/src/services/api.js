@@ -9,7 +9,7 @@ export function getFileUrl(filePath) {
 }
 
 function getToken() {
-  return localStorage.getItem("projintel_token");
+  return localStorage.getItem("projintel_token") || localStorage.getItem("token") || "";
 }
 
 async function request(method, path, body, isFormData = false) {

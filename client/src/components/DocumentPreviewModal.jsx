@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X, Download, FileText, ExternalLink, AlertCircle, FileCheck } from 'lucide-react';
+import { getFileUrl } from '../services/api';
 
 /**
  * Resolves any relative or absolute file path to a fully accessible URL.
@@ -9,8 +10,7 @@ export const resolveFileUrl = (filePath) => {
   if (filePath.startsWith('blob:') || filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('data:')) {
     return filePath;
   }
-  const cleanPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
-  return cleanPath;
+  return getFileUrl(filePath);
 };
 
 /**
