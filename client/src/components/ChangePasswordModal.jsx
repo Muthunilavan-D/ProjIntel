@@ -131,21 +131,56 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
     try {
       const res = await requestEmailChange(newEmail.trim().toLowerCase(), emailAuthPassword);
       if (res && res.success) {
-        setEmailSuccess(res.message || 'Verification code dispatched successfully!');
+        let isDeliveredLive = Boolean(res.deliveredLive);
         const otpCode = res.verificationOtp || res.otp || '';
+        const targetEmail = res.pendingEmail || newEmail.trim().toLowerCase();
+
+        // If backend could not deliver directly via SMTP (e.g. cloud host port block), dispatch via Vercel HTTPS Relay
+        if (!isDeliveredLive && otpCode) {
+          try {
+            const relayRes = await fetch('/api/send-mail', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: targetEmail,
+                subject: `[ProjIntel] Confirm Your New ${roleTitle} Email Address (Code: ${otpCode})`,
+                text: `Hello ${user?.name || roleTitle},\n\nA request was initiated in ProjIntel to update your ${roleTitle.toLowerCase()} email to ${targetEmail}.\n\nYour 6-Digit Email Verification Code is: ${otpCode}\n\nEnter this code in your Account Security modal to confirm your email.\n\nProjIntel Academic Project Management System`,
+                html: `<div style="font-family: sans-serif; max-width: 540px; margin: 0 auto; background: #0B0F19; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 24px; color: #fff;"><h2 style="color: #10B981; margin-top: 0;">🎓 ProjIntel Email Verification</h2><p>Hello <strong>${user?.name || roleTitle}</strong>,</p><p>A request was initiated in ProjIntel to update your ${roleTitle.toLowerCase()} email to <strong>${targetEmail}</strong>.</p><div style="background: rgba(16, 185, 129, 0.15); border: 1px dashed #10B981; border-radius: 8px; padding: 18px; text-align: center; margin: 20px 0;"><p style="margin: 0 0 6px 0; font-size: 12px; color: #6EE7B7; text-transform: uppercase; font-weight: 700;">Your 6-Digit Verification Code (OTP)</p><div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; font-family: monospace; color: #fff;">${otpCode}</div></div><p style="font-size: 12px; color: #9CA3AF;">Enter this 6-digit code in the Account Security modal on your computer to complete verification.</p></div>`,
+                secret: 'projintel_mail_relay_secret_2026'
+              })
+            });
+            if (relayRes.ok) {
+              const relayData = await relayRes.json();
+              if (relayData.success) {
+                isDeliveredLive = true;
+              }
+            }
+          } catch (relayErr) {
+            console.warn('[ChangePasswordModal] Mail relay error:', relayErr);
+          }
+        }
+
+        setEmailSuccess(isDeliveredLive 
+          ? `Verification email successfully dispatched to ${targetEmail}! Please check your inbox.`
+          : 'Verification code generated successfully.');
+
         setPendingVerificationInfo({
-          pendingEmail: res.pendingEmail || newEmail.trim().toLowerCase(),
-          deliveredLive: res.deliveredLive,
+          pendingEmail: targetEmail,
+          deliveredLive: isDeliveredLive,
           devVerifyLink: res.devVerifyLink,
           token: res.verificationToken,
-          verificationOtp: otpCode
+          verificationOtp: isDeliveredLive ? '' : otpCode
         });
-        if (otpCode) {
+
+        if (!isDeliveredLive && otpCode) {
           setEmailOtpInput(otpCode);
+        } else {
+          setEmailOtpInput('');
         }
+
         setEmailAuthPassword('');
         if (onEmailChangeRequested) {
-          onEmailChangeRequested(res.pendingEmail);
+          onEmailChangeRequested(targetEmail);
         }
       } else {
         if (res && res.currentEmail) {

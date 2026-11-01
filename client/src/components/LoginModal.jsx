@@ -203,12 +203,46 @@ const LoginModal = ({
     try {
       const res = await forgotPassword(emailToUse);
       if (res && res.success) {
-        setForgotSuccess(res.message || 'Verification code and reset link dispatched to your email.');
+        let isDeliveredLive = Boolean(res.deliveredLive);
         const otpCode = res.devOtp || res.otp;
-        if (otpCode) {
+
+        // If backend could not deliver directly via SMTP (e.g. cloud host port block), dispatch via Vercel HTTPS Relay
+        if (!isDeliveredLive && otpCode) {
+          try {
+            const relayRes = await fetch('/api/send-mail', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: emailToUse,
+                subject: `[ProjIntel] Account Password Reset Code: ${otpCode}`,
+                text: `Hello,\n\nWe received a request to reset your password for your ProjIntel account (${emailToUse}).\n\nYour 6-Digit Verification Code is: ${otpCode}\n\nEnter this code to reset your password.\n\nProjIntel Academic Project Management System`,
+                html: `<div style="font-family: sans-serif; max-width: 540px; margin: 0 auto; background: #0B0F19; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 24px; color: #fff;"><h2 style="color: #818CF8; margin-top: 0;">🎓 ProjIntel Password Reset</h2><p>Hello,</p><p>We received a request to reset your account password for <strong>${emailToUse}</strong>.</p><div style="background: rgba(99, 102, 241, 0.15); border: 1px dashed #6366F1; border-radius: 8px; padding: 18px; text-align: center; margin: 20px 0;"><p style="margin: 0 0 6px 0; font-size: 12px; color: #A5B4FC; text-transform: uppercase; font-weight: 700;">One-Time Security Verification Code</p><div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; font-family: monospace; color: #fff;">${otpCode}</div></div><p style="font-size: 12px; color: #9CA3AF;">Valid for 15 minutes. Enter this code on the password reset screen.</p></div>`,
+                secret: 'projintel_mail_relay_secret_2026'
+              })
+            });
+            if (relayRes.ok) {
+              const relayData = await relayRes.json();
+              if (relayData.success) {
+                isDeliveredLive = true;
+              }
+            }
+          } catch (relayErr) {
+            console.warn('[LoginModal] Forgot password relay error:', relayErr);
+          }
+        }
+
+        setForgotSuccess(isDeliveredLive 
+          ? `Verification code dispatched to ${emailToUse}! Please check your inbox.`
+          : (res.message || 'Verification code dispatched to your email.'));
+
+        if (!isDeliveredLive && otpCode) {
           setDevOtpPreview(otpCode);
           setResetOtp(otpCode); // Auto-fill if not delivered to inbox
+        } else {
+          setDevOtpPreview(null);
+          setResetOtp('');
         }
+
         if (res.resetToken) {
           setResetToken(res.resetToken);
         }
