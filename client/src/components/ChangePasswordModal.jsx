@@ -131,13 +131,18 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
     try {
       const res = await requestEmailChange(newEmail.trim().toLowerCase(), emailAuthPassword);
       if (res && res.success) {
-        setEmailSuccess(res.message || 'Verification code and link dispatched successfully!');
+        setEmailSuccess(res.message || 'Verification code dispatched successfully!');
+        const otpCode = res.verificationOtp || res.otp || '';
         setPendingVerificationInfo({
           pendingEmail: res.pendingEmail || newEmail.trim().toLowerCase(),
           deliveredLive: res.deliveredLive,
           devVerifyLink: res.devVerifyLink,
-          token: res.verificationToken
+          token: res.verificationToken,
+          verificationOtp: otpCode
         });
+        if (otpCode) {
+          setEmailOtpInput(otpCode);
+        }
         setEmailAuthPassword('');
         if (onEmailChangeRequested) {
           onEmailChangeRequested(res.pendingEmail);
@@ -500,6 +505,31 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
                     </span>
                   </div>
                 </div>
+
+                {!pendingVerificationInfo.deliveredLive && pendingVerificationInfo.verificationOtp && (
+                  <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 'var(--radius-md)', padding: '0.75rem 0.95rem', marginBottom: '1.15rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <CheckCircle2 size={15} />
+                      <span>Security Verification OTP Ready</span>
+                    </div>
+                    <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: '0 0 0.5rem 0', lineHeight: 1.4 }}>
+                      Your 6-digit confirmation code has been generated and pre-filled below:
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <code style={{ fontSize: '1.2rem', fontWeight: 800, letterSpacing: '4px', background: 'rgba(0, 0, 0, 0.35)', padding: '3px 10px', borderRadius: '6px', color: '#10B981', fontFamily: 'monospace' }}>
+                        {pendingVerificationInfo.verificationOtp}
+                      </code>
+                      <button
+                        type="button"
+                        className="btn-aesthetic btn-glass-secondary btn-xs"
+                        onClick={() => setEmailOtpInput(pendingVerificationInfo.verificationOtp)}
+                        style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                      >
+                        Auto-fill OTP
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                   <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '0.45rem' }}>

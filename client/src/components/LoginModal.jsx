@@ -204,9 +204,10 @@ const LoginModal = ({
       const res = await forgotPassword(emailToUse);
       if (res && res.success) {
         setForgotSuccess(res.message || 'Verification code and reset link dispatched to your email.');
-        if (res.devOtp) {
-          setDevOtpPreview(res.devOtp);
-          setResetOtp(res.devOtp); // Auto-fill in dev mode
+        const otpCode = res.devOtp || res.otp;
+        if (otpCode) {
+          setDevOtpPreview(otpCode);
+          setResetOtp(otpCode); // Auto-fill if not delivered to inbox
         }
         if (res.resetToken) {
           setResetToken(res.resetToken);

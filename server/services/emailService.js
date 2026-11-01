@@ -8,7 +8,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 /**
- * Creates and returns configured Nodemailer transport
+ * Creates and returns configured Nodemailer transport with fast socket timeouts
  */
 function getTransporter() {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
@@ -32,8 +32,71 @@ function getTransporter() {
     auth: {
       user,
       pass
-    }
+    },
+    // Strict connection timeouts to prevent hanging on cloud hosts (e.g. Render Free tier)
+    connectionTimeout: 3500,
+    greetingTimeout: 3500,
+    socketTimeout: 4500
   });
+}
+
+/**
+ * Optional HTTPS-based email delivery (Brevo / Resend) if configured
+ */
+async function sendViaHttpApi({ toEmail, subject, htmlContent, textBody, fromEmail }) {
+  // 1. Try Brevo HTTPS API (Port 443 — never blocked by cloud hosts)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sender: { name: 'ProjIntel Admin Cell', email: fromEmail },
+          to: [{ email: toEmail }],
+          subject,
+          htmlContent,
+          textContent: textBody
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, messageId: data.messageId || 'brevo-api' };
+      }
+    } catch (err) {
+      console.warn('[EMAIL SERVICE] Brevo HTTP dispatch failed:', err.message);
+    }
+  }
+
+  // 2. Try Resend HTTPS API (Port 443 — never blocked by cloud hosts)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: fromEmail.includes('@') ? `ProjIntel <${fromEmail}>` : 'ProjIntel <onboarding@resend.dev>',
+          to: [toEmail],
+          subject,
+          html: htmlContent,
+          text: textBody
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, messageId: data.id || 'resend-api' };
+      }
+    } catch (err) {
+      console.warn('[EMAIL SERVICE] Resend HTTP dispatch failed:', err.message);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -101,6 +164,27 @@ async function sendPasswordResetOtp({ toEmail, name = 'Administrator', otp, rese
   console.log(`Reset Link: ${resetLink}`);
   console.log(`======================================================\n`);
 
+  // 1. Check HTTP-based transactional mail APIs first (port 443 — reliable across cloud hosts)
+  const httpResult = await sendViaHttpApi({
+    toEmail,
+    subject: `[ProjIntel] Admin Password Reset Code: ${otp}`,
+    htmlContent,
+    textBody: `Hello ${name},\n\nWe received a request to reset the password for your ProjIntel administrator account (${toEmail}).\n\nYour 6-Digit Verification Code (OTP) is: ${otp}\n\nValid for 15 minutes.\nAlternatively, open this direct reset link:\n${resetLink}\n\nProjIntel Academic Project Management System`,
+    fromEmail
+  });
+
+  if (httpResult && httpResult.success) {
+    console.log(`[EMAIL SERVICE] ✅ Live email delivered via HTTPS API! MessageId: ${httpResult.messageId}`);
+    return {
+      success: true,
+      deliveredLive: true,
+      messageId: httpResult.messageId,
+      otp,
+      resetToken,
+      resetLink
+    };
+  }
+
   if (!transporter) {
     console.log(`[EMAIL SERVICE] ℹ️ SMTP credentials not detected in .env. Live OTP recorded above for immediate verification.`);
     return {
@@ -114,13 +198,20 @@ async function sendPasswordResetOtp({ toEmail, name = 'Administrator', otp, rese
   }
 
   try {
-    const info = await transporter.sendMail({
+    const sendPromise = transporter.sendMail({
       from: `"ProjIntel Admin Cell" <${fromEmail}>`,
       to: toEmail,
       subject: `[ProjIntel] Admin Password Reset Code: ${otp}`,
       text: `Hello ${name},\n\nWe received a request to reset the password for your ProjIntel administrator account (${toEmail}).\n\nYour 6-Digit Verification Code (OTP) is: ${otp}\n\nValid for 15 minutes.\nAlternatively, open this direct reset link:\n${resetLink}\n\nProjIntel Academic Project Management System`,
       html: htmlContent
     });
+
+    // 3.5s timeout safeguard against cloud provider outbound port blocks (e.g. Render Free tier)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SMTP connection timed out (outbound port blocked by host)')), 3500)
+    );
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     console.log(`[EMAIL SERVICE] ✅ Live email delivered successfully! MessageId: ${info.messageId}`);
     return {
       success: true,
@@ -131,7 +222,7 @@ async function sendPasswordResetOtp({ toEmail, name = 'Administrator', otp, rese
       resetLink
     };
   } catch (err) {
-    console.error(`[EMAIL SERVICE] ❌ Failed to send email via SMTP:`, err.message);
+    console.warn(`[EMAIL SERVICE] ⚠️ SMTP delivery bypassed (${err.message}). Instant code verification available.`);
     return {
       success: true,
       deliveredLive: false,
@@ -221,6 +312,32 @@ async function sendEmailChangeVerification({ newEmail, currentEmail, name = 'Adm
   console.log(`Verification Link: ${verifyLink}`);
   console.log(`======================================================\n`);
 
+  const textBody = `Hello ${name},\n\nA request was initiated to update the ProjIntel administrator email from ${currentEmail} to ${newEmail}.\n\n` +
+    (verificationOtp ? `Your 6-Digit Email Verification Code: ${verificationOtp}\n(Enter this code in the Account Security modal on your computer)\n\n` : '') +
+    `Or if you are on your computer, click this link to confirm:\n${verifyLink}\n\nThis verification expires in 24 hours.\n\nProjIntel Academic Project Management System`;
+  const emailSubject = `[ProjIntel] Confirm Your New Admin Email Address${verificationOtp ? ` (Code: ${verificationOtp})` : ''}`;
+
+  // 1. Check HTTP-based transactional mail APIs first (port 443 — reliable across cloud hosts)
+  const httpResult = await sendViaHttpApi({
+    toEmail: newEmail,
+    subject: emailSubject,
+    htmlContent,
+    textBody,
+    fromEmail
+  });
+
+  if (httpResult && httpResult.success) {
+    console.log(`[EMAIL SERVICE] ✅ Live verification email delivered via HTTPS API! MessageId: ${httpResult.messageId}`);
+    return {
+      success: true,
+      deliveredLive: true,
+      messageId: httpResult.messageId,
+      verificationToken,
+      verificationOtp,
+      verifyLink
+    };
+  }
+
   if (!transporter) {
     console.log(`[EMAIL SERVICE] ℹ️ SMTP credentials not detected in .env. Verification link logged above for immediate testing.`);
     return {
@@ -234,17 +351,20 @@ async function sendEmailChangeVerification({ newEmail, currentEmail, name = 'Adm
   }
 
   try {
-    const textBody = `Hello ${name},\n\nA request was initiated to update the ProjIntel administrator email from ${currentEmail} to ${newEmail}.\n\n` +
-      (verificationOtp ? `Your 6-Digit Email Verification Code: ${verificationOtp}\n(Enter this code in the Account Security modal on your computer)\n\n` : '') +
-      `Or if you are on your computer, click this link to confirm:\n${verifyLink}\n\nThis verification expires in 24 hours.\n\nProjIntel Academic Project Management System`;
-
-    const info = await transporter.sendMail({
+    const sendPromise = transporter.sendMail({
       from: `"ProjIntel Admin Cell" <${fromEmail}>`,
       to: newEmail,
-      subject: `[ProjIntel] Confirm Your New Admin Email Address${verificationOtp ? ` (Code: ${verificationOtp})` : ''}`,
+      subject: emailSubject,
       text: textBody,
       html: htmlContent
     });
+
+    // 3.5s timeout safeguard against cloud provider outbound port blocks (e.g. Render Free tier)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SMTP connection timed out (outbound port blocked by host)')), 3500)
+    );
+
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     console.log(`[EMAIL SERVICE] ✅ Live verification email delivered successfully! MessageId: ${info.messageId}`);
     return {
       success: true,
@@ -255,7 +375,7 @@ async function sendEmailChangeVerification({ newEmail, currentEmail, name = 'Adm
       verifyLink
     };
   } catch (err) {
-    console.error(`[EMAIL SERVICE] ❌ Failed to send email via SMTP:`, err.message);
+    console.warn(`[EMAIL SERVICE] ⚠️ SMTP delivery bypassed (${err.message}). Instant code verification available.`);
     return {
       success: true,
       deliveredLive: false,

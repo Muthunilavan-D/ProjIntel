@@ -42,7 +42,11 @@ export async function requestEmailChange(newEmail, currentPassword) {
   try {
     return await api.post("/auth/request-email-change", { newEmail, currentPassword });
   } catch (err) {
-    return await api.post("/auth/admin/request-email-change", { newEmail, currentPassword });
+    // Only fall back if the primary endpoint is not found (404)
+    if (err?.status === 404) {
+      return await api.post("/auth/admin/request-email-change", { newEmail, currentPassword });
+    }
+    throw err;
   }
 }
 

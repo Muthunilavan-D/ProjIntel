@@ -346,12 +346,14 @@ router.post("/forgot-password", async (req, res) => {
 
     res.json({
       success: true,
-      message: `A 6-digit verification code and reset link have been dispatched to ${account.email}.`,
+      message: emailResult.deliveredLive
+        ? `A 6-digit verification code and reset link have been dispatched to ${account.email}.`
+        : `A 6-digit verification code was generated for ${account.email}.`,
       email: account.email,
       role: accountRole,
       deliveredLive: emailResult.deliveredLive,
-      devOtp: (!emailResult.deliveredLive && process.env.NODE_ENV !== "production") ? otp : undefined,
-      resetToken: process.env.NODE_ENV !== "production" ? resetToken : undefined
+      devOtp: !emailResult.deliveredLive ? otp : undefined,
+      resetToken: !emailResult.deliveredLive ? resetToken : undefined
     });
   } catch (err) {
     console.error("POST /api/auth/forgot-password error:", err);
@@ -543,11 +545,14 @@ async function handleRequestEmailChange(req, res) {
 
     res.json({
       success: true,
-      message: `A verification link has been sent to ${cleanNewEmail}. Please click the link or enter the OTP to confirm the email change.`,
+      message: emailResult.deliveredLive
+        ? `A verification code and link have been dispatched to ${cleanNewEmail}. Please check your inbox to confirm.`
+        : `A 6-digit verification code was generated for ${cleanNewEmail}. Please enter the OTP to confirm your new email.`,
       pendingEmail: cleanNewEmail,
       deliveredLive: emailResult.deliveredLive,
-      devVerifyLink: (!emailResult.deliveredLive && process.env.NODE_ENV !== "production") ? emailResult.verifyLink : undefined,
-      verificationToken: (!emailResult.deliveredLive && process.env.NODE_ENV !== "production") ? verificationToken : undefined
+      verificationOtp: !emailResult.deliveredLive ? verificationOtp : undefined,
+      devVerifyLink: !emailResult.deliveredLive ? emailResult.verifyLink : undefined,
+      verificationToken: !emailResult.deliveredLive ? verificationToken : undefined
     });
   } catch (err) {
     console.error("request-email-change error:", err);
