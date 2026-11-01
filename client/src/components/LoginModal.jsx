@@ -140,10 +140,10 @@ const LoginModal = ({
     setLoginError(null);
     if (selectedRole === 'Admin') {
       setLoginIdentifier('muthunilavand555@gmail.com');
-      setLoginPassword('admin123');
+      setLoginPassword('');
     } else if (selectedRole === 'Faculty') {
       setLoginIdentifier('faculty2@vcet.edu.in');
-      setLoginPassword('password123');
+      setLoginPassword('');
     } else {
       setLoginIdentifier('');
       setLoginPassword('');

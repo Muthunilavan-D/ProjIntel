@@ -1713,8 +1713,14 @@ function App() {
         {/* Institutional Sign In Modal */}
         <LoginModal
           isOpen={isLoginOpen}
-          onClose={() => setIsLoginOpen(false)}
+          onClose={() => {
+            setIsLoginOpen(false);
+            setLoginModalInitialRole(null);
+            setInitialResetParams(null);
+          }}
           onLoginSuccess={handleLoginSuccess}
+          initialRole={loginModalInitialRole}
+          initialResetParams={initialResetParams}
         />
 
         {/* Create New Project Proposal Modal */}
