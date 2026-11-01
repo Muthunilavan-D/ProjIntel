@@ -87,7 +87,7 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
     try {
       const res = await changePassword(currentPassword, newPassword);
       if (res && res.success) {
-        setPwSuccess('Your password has been changed successfully!');
+        setPwSuccess('Password updated.');
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -161,8 +161,8 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
         }
 
         setEmailSuccess(isDeliveredLive 
-          ? `Verification email successfully dispatched to ${targetEmail}! Please check your inbox.`
-          : 'Verification code generated successfully.');
+          ? 'Verification code sent.'
+          : 'Verification code sent.');
 
         setPendingVerificationInfo({
           pendingEmail: targetEmail,
@@ -215,7 +215,7 @@ const ChangePasswordModal = ({ isOpen, onClose, user, onEmailChangeRequested }) 
         email: targetEmail
       });
       if (res && res.success) {
-        setEmailSuccess(res.message || `${roleTitle} email successfully updated!`);
+        setEmailSuccess('Email updated.');
         if (res.token) saveToken(res.token);
         if (res.user) {
           setCurrentAdminEmail(res.user.email);

@@ -3454,7 +3454,7 @@ const StudentDashboard = ({
                                 const newP = t.recommendedPriority === 'CRITICAL' ? 'HIGH' : t.recommendedPriority;
                                 const updatedTasks = (project.tasks || []).map(pt => pt.id === matchedTask.id ? { ...pt, priority: newP } : pt);
                                 onUpdateProject({ ...project, tasks: updatedTasks });
-                                alert(`Updated priority for "${t.title}" to ${newP}.`);
+                                alert('Priority updated.');
                               }
                             }}
                           >

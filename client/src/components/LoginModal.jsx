@@ -232,8 +232,8 @@ const LoginModal = ({
         }
 
         setForgotSuccess(isDeliveredLive 
-          ? `Verification code dispatched to ${emailToUse}! Please check your inbox.`
-          : (res.message || 'Verification code dispatched to your email.'));
+          ? 'Verification code sent.'
+          : 'Verification code sent.');
 
         if (!isDeliveredLive && otpCode) {
           setDevOtpPreview(otpCode);
@@ -288,7 +288,7 @@ const LoginModal = ({
       });
 
       if (res && res.success) {
-        setForgotSuccess('Password updated successfully! Redirecting to sign in...');
+        setForgotSuccess('Password updated.');
         setLoginPassword(newResetPassword.trim());
         setLoginIdentifier(forgotEmail.trim().toLowerCase());
         setTimeout(() => {

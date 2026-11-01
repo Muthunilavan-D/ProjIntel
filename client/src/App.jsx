@@ -352,7 +352,7 @@ function App() {
         verifyEmailToken(verifyToken)
           .then(res => {
             if (res && res.success) {
-              showToast(res.message || 'Administrator email successfully verified!');
+              showToast('Email verified.');
               if (res.token && res.user) {
                 saveToken(res.token);
                 const normalized = {
@@ -364,11 +364,11 @@ function App() {
                 loadAllData(normalized);
               }
             } else {
-              showToast(res?.error || 'Email verification link is invalid or expired.');
+              showToast('Invalid or expired link.');
             }
           })
           .catch(err => {
-            showToast(err?.message || 'Failed to verify email token.');
+            showToast('Verification failed.');
           })
           .finally(() => {
             window.history.replaceState({}, document.title, window.location.pathname);
@@ -407,7 +407,7 @@ function App() {
     setUser(normalizedUser);
     setActiveView('dashboard');
     loadAllData(normalizedUser);
-    showToast(`Welcome back ${normalizedUser.name}! Logged into ${normalizedUser.role} Portal.`);
+    showToast('Signed in successfully.');
   };
 
   const handleLogout = () => {
@@ -419,14 +419,14 @@ function App() {
     setReviewsList([]);
     setNotifications([]);
     setActiveView('landing');
-    showToast('Signed out of session securely.');
+    showToast('Signed out.');
   };
 
 
   // Project Lifecycle Handlers — all wired to real API
   const handleCreateProject = async (projectPayload, actionType) => {
     if (isPassedOutStudent) {
-      showToast('Graduated / passed-out students cannot propose new projects.');
+      showToast('Proposals unavailable for graduated students.');
       return;
     }
     try {
@@ -477,15 +477,15 @@ function App() {
         }
         if (actionType === 'submit') {
           await handleSubmitProposal(proj._id);
-          showToast(`Proposal "${proj.title.substring(0, 28)}..." submitted for Faculty Review!`);
+          showToast('Proposal submitted.');
         } else {
-          showToast(`Project "${proj.title.substring(0, 28)}..." saved as Draft.`);
+          showToast('Draft saved.');
         }
         notifyCrossTabSync();
         await loadAllData(user);
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
     }
   };
 
@@ -495,7 +495,7 @@ function App() {
       if (options?.skipApi) {
         setProjectsList(prev => prev.map(p => (p.id === id || p._id === id) ? { ...p, ...updatedProj } : p));
         if (!options?.silent) {
-          showToast(`Project "${updatedProj.title?.substring(0, 25) || ''}" saved.`);
+          showToast('Project updated.');
         }
         return;
       }
@@ -503,7 +503,7 @@ function App() {
       if (res.success) {
         setProjectsList(prev => prev.map(p => (p.id === id || p._id === id) ? { ...p, ...updatedProj } : p));
         if (!options?.silent) {
-          showToast(`Project "${updatedProj.title?.substring(0, 25) || ''}" saved.`);
+          showToast('Project updated.');
         }
         notifyCrossTabSync();
       }
@@ -522,12 +522,12 @@ function App() {
             ? { ...p, status: 'SUBMITTED', submittedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
             : p
         ));
-        showToast('Proposal submitted! Placed in Faculty Review Queue.');
+        showToast('Proposal submitted.');
         notifyCrossTabSync();
         await loadAllData(user);
       }
     } catch (err) {
-      showToast(`Submission error: ${err.message}`);
+      showToast('Submission failed.');
     }
   };
 
@@ -540,11 +540,11 @@ function App() {
             ? { ...p, status: 'APPROVED', guideName: guideName || p.guideName, guideId, approvedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
             : p
         ));
-        showToast(`Project approved and placed under your supervision!`);
+        showToast('Project approved.');
         notifyCrossTabSync();
         await loadAllData(user);
       }
-    } catch (err) { showToast(`Error: ${err.message}`); }
+    } catch (err) { showToast('Action failed.'); }
   };
 
   const handleRequestRevision = async (projectId, revisionNotes) => {
@@ -554,11 +554,11 @@ function App() {
         setProjectsList(prev => prev.map(p =>
           (p.id === projectId || p._id === projectId) ? { ...p, status: 'REVISION_REQUIRED', revisionNotes } : p
         ));
-        showToast(`Revision request sent to student team.`);
+        showToast('Revision requested.');
         notifyCrossTabSync();
         await loadAllData(user);
       }
-    } catch (err) { showToast(`Error: ${err.message}`); }
+    } catch (err) { showToast('Action failed.'); }
   };
 
   const handleRejectProposal = async (projectId, reason) => {
@@ -568,11 +568,11 @@ function App() {
         setProjectsList(prev => prev.map(p =>
           (p.id === projectId || p._id === projectId) ? { ...p, status: 'REJECTED', revisionNotes: reason } : p
         ));
-        showToast(`Project proposal declined.`);
+        showToast('Proposal declined.');
         notifyCrossTabSync();
         await loadAllData(user);
       }
-    } catch (err) { showToast(`Error: ${err.message}`); }
+    } catch (err) { showToast('Action failed.'); }
   };
 
   const handleAssignGuide = async (projectId, guideName, guideId) => {
@@ -584,12 +584,12 @@ function App() {
             ? { ...p, ...(res.data || {}), guideName, guideId }
             : p
         ));
-        showToast(`Assigned ${guideName} to project team.`);
+        showToast('Guide assigned.');
         notifyCrossTabSync();
         await loadAllData(user);
         return res;
       }
-    } catch (err) { showToast(`Error: ${err.message}`); throw err; }
+    } catch (err) { showToast('Action failed.'); throw err; }
   };
 
   const handleCompleteProject = async (projectId, payload = {}) => {
@@ -609,13 +609,13 @@ function App() {
             ? { ...p, ...(res.data || {}), status: 'COMPLETED', progress: 100 }
             : p
         ));
-        showToast(`Project officially signed off & certified as COMPLETED with Grade ${safePayload.finalGrade}!`);
+        showToast('Project completed.');
         notifyCrossTabSync();
         await loadAllData(user);
         return res;
       }
     } catch (err) {
-      showToast(`Error completing project: ${err.message}`);
+      showToast('Failed to complete project.');
       throw err;
     }
   };
@@ -629,13 +629,13 @@ function App() {
             ? { ...p, ...(res.data || {}), status: 'APPROVED' }
             : p
         ));
-        showToast(`Project restored to active status.`);
+        showToast('Project reopened.');
         notifyCrossTabSync();
         await loadAllData(user);
         return res;
       }
     } catch (err) {
-      showToast(`Error reopening project: ${err.message}`);
+      showToast('Failed to reopen project.');
       throw err;
     }
   };
@@ -645,13 +645,13 @@ function App() {
       const res = await apiUpdateSystemSettings(settingsData);
       if (res.success) {
         setSystemSettings(res.data);
-        showToast(res.message || 'Institutional academic settings updated.');
+        showToast('Settings updated.');
         notifyCrossTabSync();
         await loadAllData(user);
         return res;
       }
     } catch (err) {
-      showToast(`Error updating academic settings: ${err.message}`);
+      showToast('Failed to update settings.');
       throw err;
     }
   };
@@ -688,9 +688,9 @@ function App() {
           console.warn('Failed to refresh milestones after task add:', msErr);
         }
 
-        showToast(`Task "${task.title}" added!`);
+        showToast('Task created.');
       }
-    } catch (err) { showToast(`Error: ${err.message}`); }
+    } catch (err) { showToast('Action failed.'); }
   };
 
   const handleUpdateTaskStatus = async (projectId, taskId, newStatus) => {
@@ -724,8 +724,8 @@ function App() {
         console.warn('Failed to refresh milestones after task update:', msErr);
       }
 
-      showToast(`Task status updated to ${newStatus}.`);
-    } catch (err) { showToast(`Error: ${err.message}`); }
+      showToast('Task updated.');
+    } catch (err) { showToast('Action failed.'); }
   };
 
   const handleUpdateTask = async (projectId, taskId, updatedFields) => {
@@ -760,10 +760,10 @@ function App() {
           console.warn('Failed to refresh milestones after task edit:', msErr);
         }
 
-        showToast('Task updated successfully.');
+        showToast('Task updated.');
       }
     } catch (err) {
-      showToast(`Error updating task: ${err.message}`);
+      showToast('Failed to update task.');
     }
   };
 
@@ -794,7 +794,7 @@ function App() {
       }
       showToast('Task removed.');
     } catch (err) {
-      showToast(`Error deleting task: ${err.message}`);
+      showToast('Failed to remove task.');
     }
   };
 
@@ -820,10 +820,10 @@ function App() {
         } catch (fetchErr) {
           console.warn('Failed to refresh milestones list after add:', fetchErr);
         }
-        showToast(`Milestone "${res.data.title || 'Stage'}" added successfully!`);
+        showToast('Milestone added.');
       }
     } catch (err) {
-      showToast(`Error adding milestone: ${err.message}`);
+      showToast('Failed to add milestone.');
     }
   };
 
@@ -843,10 +843,10 @@ function App() {
               : p
           ));
         }
-        showToast('Milestone updated successfully.');
+        showToast('Milestone updated.');
       }
     } catch (err) {
-      showToast(`Error updating milestone: ${err.message}`);
+      showToast('Failed to update milestone.');
     }
   };
 
@@ -873,10 +873,10 @@ function App() {
             ? { ...p, milestones: updatedMs, tasks: updatedTasks, progress: avgProgress }
             : p
         ));
-        showToast('Milestone deleted. Remaining stages automatically renumbered.');
+        showToast('Milestone removed.');
       }
     } catch (err) {
-      showToast(`Error deleting milestone: ${err.message}`);
+      showToast('Failed to remove milestone.');
     }
   };
 
@@ -896,10 +896,10 @@ function App() {
               : p
           ));
         }
-        showToast('Milestone stage verified and signed off by Faculty Guide!');
+        showToast('Milestone verified.');
       }
     } catch (err) {
-      showToast(`Error verifying milestone: ${err.message}`);
+      showToast('Failed to verify milestone.');
     }
   };
 
@@ -919,10 +919,10 @@ function App() {
               : p
           ));
         }
-        showToast('Milestone verification revoked and status restored.');
+        showToast('Verification revoked.');
       }
     } catch (err) {
-      showToast(`Error undoing milestone verification: ${err.message}`);
+      showToast('Failed to revoke verification.');
     }
   };
 
@@ -944,10 +944,10 @@ function App() {
               }
             : p
         ));
-        showToast(`Week #${weeklyData.weekNumber} progress submitted!`);
+        showToast('Weekly report submitted.');
         loadAllData(user).catch(() => {});
       }
-    } catch (err) { showToast(`Error: ${err.message}`); }
+    } catch (err) { showToast('Action failed.'); }
   };
 
   const handleUpdateWeeklyProgress = async (projectId, weekId, updatedFields) => {
@@ -980,15 +980,15 @@ function App() {
               : p.progress
           };
         }));
-        showToast(`Week #${updatedData.weekNumber || ''} report updated successfully!`);
+        showToast('Weekly report updated.');
         loadAllData(user).catch(() => {});
         return true;
       } else {
-        showToast(`Error: ${res.error || 'Failed to update report'}`);
+        showToast('Failed to update report.');
         return false;
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       return false;
     }
   };
@@ -1003,9 +1003,9 @@ function App() {
             )}
           : p
       ));
-      showToast('Weekly feedback saved successfully!');
+      showToast('Feedback saved.');
       loadAllData(user).catch(() => {});
-    } catch (err) { showToast(`Error: ${err.message}`); }
+    } catch (err) { showToast('Action failed.'); }
   };
 
 
@@ -1016,7 +1016,7 @@ function App() {
         ? { ...p, documents: [docData, ...(p.documents || [])] }
         : p
     ));
-    showToast(`Document "${docData.fileName}" uploaded to project repository.`);
+    showToast('Document uploaded.');
   };
 
   // Direct Discussion & Guidance Comments Handler
@@ -1041,10 +1041,10 @@ function App() {
             : p
         ));
       }
-      showToast('Message sent to project guidance discussion.');
+      showToast('Message sent.');
       loadAllData(user).catch(() => {});
     } catch (err) {
-      showToast(`Error sending message: ${err.message}`);
+      showToast('Failed to send message.');
     }
   };
 
@@ -1056,14 +1056,14 @@ function App() {
       if (res && res.success && res.data) {
         const createdRev = { ...res.data, id: res.data._id || res.data.id };
         setReviewsList((prev) => [createdRev, ...prev]);
-        showToast(`Review "${createdRev.title}" scheduled successfully!`);
+        showToast('Review scheduled.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to schedule review');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1076,14 +1076,14 @@ function App() {
         setReviewsList((prev) =>
           prev.map((r) => ((r.id === reviewId || r._id === reviewId) ? updatedRev : r))
         );
-        showToast(`Review "${updatedRev.title}" rescheduled successfully!`);
+        showToast('Review updated.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to reschedule review');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1093,14 +1093,14 @@ function App() {
       const res = await apiDeleteReview(reviewId);
       if (res && res.success) {
         setReviewsList((prev) => prev.filter((r) => r.id !== reviewId && r._id !== reviewId));
-        showToast('Review deleted.');
+        showToast('Review removed.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to delete review');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1110,14 +1110,14 @@ function App() {
     try {
       const res = await apiCreateStudent(studentData);
       if (res && res.success) {
-        showToast(`Student account for ${studentData.name} created!`);
+        showToast('Student added.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to create student account');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1126,14 +1126,14 @@ function App() {
     try {
       const res = await apiUpdateStudent(studentId, studentData);
       if (res && res.success) {
-        showToast(`Student details updated successfully.`);
+        showToast('Student updated.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to update student');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1142,14 +1142,14 @@ function App() {
     try {
       const res = await apiDeleteStudent(studentId);
       if (res && res.success) {
-        showToast('Student account deleted.');
+        showToast('Student removed.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to delete student');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1159,14 +1159,14 @@ function App() {
     try {
       const res = await apiCreateFaculty(facultyData);
       if (res && res.success) {
-        showToast(`Faculty account for ${facultyData.name} created!`);
+        showToast('Faculty added.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to create faculty account');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1175,14 +1175,14 @@ function App() {
     try {
       const res = await apiUpdateFaculty(facultyId, facultyData);
       if (res && res.success) {
-        showToast(`Faculty details updated successfully.`);
+        showToast('Faculty updated.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to update faculty');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1191,14 +1191,14 @@ function App() {
     try {
       const res = await apiDeleteFaculty(facultyId);
       if (res && res.success) {
-        showToast('Faculty account deleted.');
+        showToast('Faculty removed.');
         await loadAllData(user);
         return res;
       } else {
         throw new Error(res?.error || 'Failed to delete faculty');
       }
     } catch (err) {
-      showToast(`Error: ${err.message}`);
+      showToast('Action failed.');
       throw err;
     }
   };
@@ -1229,7 +1229,7 @@ function App() {
         return r;
       })
     );
-    showToast(`Review deliverable "${newSub.fileName}" submitted successfully!`);
+    showToast('Deliverable submitted.');
 
     try {
       const res = await submitReviewDeliverable(reviewId, {
@@ -1286,7 +1286,7 @@ function App() {
         return r;
       })
     );
-    showToast(`Official Grade ${fullEval.grade} (${fullEval.marks}/${fullEval.maxMarks}) submitted successfully!`);
+    showToast('Evaluation submitted.');
 
     try {
       const res = await submitOfficialEvaluation(reviewId, evaluationPayload);
@@ -1462,7 +1462,7 @@ function App() {
             };
             setUser(normalized);
             loadAllData(normalized);
-            showToast(`Profile updated: Institutional email verified as ${normalized.email}`);
+            showToast('Profile updated.');
           }}
         />
 

@@ -272,7 +272,7 @@ const IEEEStudentSection = ({
 
       const data = await res.json();
       if (data && data.success) {
-        setSaveSuccessMessage('IEEE publication details successfully synchronized.');
+        setSaveSuccessMessage('Details saved.');
         if (onUpdateProject) {
           onUpdateProject({
             ...project,
@@ -301,7 +301,7 @@ const IEEEStudentSection = ({
           ieeeDetails: updatedIeee
         });
       }
-      setSaveSuccessMessage('IEEE details saved successfully.');
+      setSaveSuccessMessage('Details saved.');
     } finally {
       setIsSaving(false);
     }
@@ -342,7 +342,7 @@ const IEEEStudentSection = ({
       if (data && data.success) {
         setLatestDraft(hasValidFile(data.data.latestDraft) ? data.data.latestDraft : null);
         setPreviousDraft(hasValidFile(data.data.previousDraft) ? data.data.previousDraft : null);
-        setSaveSuccessMessage(data.message || 'New draft uploaded. Previous version archived.');
+        setSaveSuccessMessage('Draft uploaded.');
         if (onUpdateProject) {
           onUpdateProject({
             ...project,
@@ -382,7 +382,7 @@ const IEEEStudentSection = ({
       if (onUpdateProject) {
         onUpdateProject({ ...project, ieeeDetails: updatedIeee });
       }
-      setSaveSuccessMessage(`Draft v${nextVer} uploaded successfully. Previous draft retained.`);
+      setSaveSuccessMessage('Draft uploaded.');
     } finally {
       setIsUploadingDraft(false);
       if (draftInputRef.current) draftInputRef.current.value = '';
@@ -425,7 +425,7 @@ const IEEEStudentSection = ({
           setPublicationProof(hasValidFile(d.publicationProof) ? d.publicationProof : null);
           setIsPublished(true);
         }
-        setSaveSuccessMessage(data.message || `${proofType} proof uploaded successfully.`);
+        setSaveSuccessMessage('Proof uploaded.');
         if (onUpdateProject) {
           onUpdateProject({ ...project, ieeeDetails: d });
         }
@@ -451,7 +451,7 @@ const IEEEStudentSection = ({
         setPublicationProof(mockDoc);
         setIsPublished(true);
       }
-      setSaveSuccessMessage(`${proofType.charAt(0).toUpperCase() + proofType.slice(1)} proof uploaded.`);
+      setSaveSuccessMessage('Proof uploaded.');
     } finally {
       setUploadingProofType(null);
       if (proofType === 'submission' && submissionProofInputRef.current) submissionProofInputRef.current.value = '';

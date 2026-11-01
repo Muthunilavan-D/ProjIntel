@@ -196,9 +196,9 @@ const TeamFormationWorkspace = ({ user, onOpenNewProject, onTeamFormed, onRefres
         setIsLeader(true);
         setSelectedMembers([]);
         if (targetSize === 1) {
-          setSuccessMessage('Solo team formed successfully! You can now propose your project.');
+          setSuccessMessage('Team created.');
         } else {
-          setSuccessMessage(`Team created! Invitations dispatched to ${selectedMembers.length} peer(s).`);
+          setSuccessMessage('Team created.');
         }
         await loadTeamData(true);
         if (onRefreshUser) onRefreshUser();
@@ -220,12 +220,12 @@ const TeamFormationWorkspace = ({ user, onOpenNewProject, onTeamFormed, onRefres
       const res = await respondToInvitation(teamId, action);
       if (res.success) {
         if (action === 'ACCEPT') {
-          setSuccessMessage('You have joined the team! Welcome aboard.');
+          setSuccessMessage('Joined team.');
           setMyTeam(res.data);
           setIsLeader(false);
           if (onTeamFormed) onTeamFormed(res.data);
         } else {
-          setSuccessMessage('Invitation declined. You can now configure and form your own project team.');
+          setSuccessMessage('Invitation declined.');
           setMyTeam(null);
           setIsLeader(false);
         }
@@ -250,7 +250,7 @@ const TeamFormationWorkspace = ({ user, onOpenNewProject, onTeamFormed, onRefres
       const res = await inviteTeamMember(myTeam._id, { studentId: targetStudent._id });
       if (res.success) {
         setMyTeam(res.data);
-        setSuccessMessage(`Invitation dispatched to ${targetStudent.name} (${targetStudent.regNo}).`);
+        setSuccessMessage('Invitation sent.');
         setIsReplacementModalOpen(false);
         await loadTeamData(true);
       } else {
@@ -292,7 +292,7 @@ const TeamFormationWorkspace = ({ user, onOpenNewProject, onTeamFormed, onRefres
         setMyTeam(null);
         setIsLeader(false);
         setSelectedMembers([]);
-        setSuccessMessage('Team disbanded. You can now create a new team or join an invitation.');
+        setSuccessMessage('Team disbanded.');
         await loadTeamData(true);
         if (onRefreshUser) onRefreshUser();
       } else {
