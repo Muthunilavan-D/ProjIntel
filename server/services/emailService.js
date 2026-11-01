@@ -41,10 +41,43 @@ function getTransporter() {
 }
 
 /**
- * Optional HTTPS-based email delivery (Brevo / Resend) if configured
+ * Optional HTTPS-based email delivery (Vercel Relay / Brevo / Resend)
  */
 async function sendViaHttpApi({ toEmail, subject, htmlContent, textBody, fromEmail }) {
-  // 1. Try Brevo HTTPS API (Port 443 — never blocked by cloud hosts)
+  // 1. Try Vercel Serverless Mail Relay (HTTPS Port 443 — uses Gmail SMTP from Vercel without cloud port blocks)
+  try {
+    const relayUrl = process.env.MAIL_RELAY_URL || 'https://proj-intel.vercel.app/api/send-mail';
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 9000);
+    const res = await fetch(relayUrl, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: toEmail,
+        subject,
+        html: htmlContent,
+        text: textBody,
+        from: fromEmail,
+        secret: 'projintel_mail_relay_secret_2026'
+      })
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        console.log(`[EMAIL SERVICE] ✅ Live email delivered via Vercel HTTPS Relay! MessageId: ${data.messageId}`);
+        return { success: true, messageId: data.messageId };
+      }
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      console.warn(`[EMAIL SERVICE] Vercel Relay HTTP ${res.status}:`, errData.error || res.statusText);
+    }
+  } catch (err) {
+    console.warn(`[EMAIL SERVICE] Vercel Relay attempt:`, err.message);
+  }
+
+  // 2. Try Brevo HTTPS API (Port 443 — never blocked by cloud hosts)
   if (process.env.BREVO_API_KEY) {
     try {
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -70,7 +103,7 @@ async function sendViaHttpApi({ toEmail, subject, htmlContent, textBody, fromEma
     }
   }
 
-  // 2. Try Resend HTTPS API (Port 443 — never blocked by cloud hosts)
+  // 3. Try Resend HTTPS API (Port 443 — never blocked by cloud hosts)
   if (process.env.RESEND_API_KEY) {
     try {
       const res = await fetch('https://api.resend.com/emails', {

@@ -9,7 +9,17 @@
     "seed": "npm run seed --prefix server",
     "build": "npm run build --prefix client"
   },
-  "keywords": ["academic", "project-management", "ai", "react", "express", "mongodb"],
+  "keywords": [
+    "academic",
+    "project-management",
+    "ai",
+    "react",
+    "express",
+    "mongodb"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "nodemailer": "^10.3.1"
+  }
 }
