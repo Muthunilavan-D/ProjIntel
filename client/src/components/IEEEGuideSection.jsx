@@ -75,22 +75,31 @@ const IEEEGuideSection = ({
   }, [eligibleProjects, selectedProjectId]);
 
   const hasValidFile = (fileObj) => {
-    return Boolean(
-      fileObj &&
-      typeof fileObj === 'object' &&
-      fileObj.filePath &&
-      typeof fileObj.filePath === 'string' &&
-      fileObj.filePath.trim().length > 0 &&
-      fileObj.filePath.trim() !== '#'
-    );
+    if (!fileObj || typeof fileObj !== 'object') return false;
+    const path = (fileObj.filePath || fileObj.url || fileObj.path || '').trim();
+    const name = (fileObj.fileName || fileObj.originalName || fileObj.name || '').trim();
+    return Boolean((path.length > 0 && path !== '#') || name.length > 0);
+  };
+
+  const normalizeFileObj = (fileObj, defaultFolder = 'ieee') => {
+    if (!hasValidFile(fileObj)) return null;
+    const fileName = (fileObj.fileName || fileObj.originalName || fileObj.name || '').trim();
+    const rawPath = (fileObj.filePath || fileObj.url || fileObj.path || '').trim();
+    const filePath = (rawPath && rawPath !== '#') ? rawPath : `/uploads/${defaultFolder}/${fileName}`;
+    return {
+      ...fileObj,
+      fileName: fileName || (filePath ? filePath.split(/[/\\]/).pop() : ''),
+      filePath,
+      originalName: fileObj.originalName || fileObj.name || fileName
+    };
   };
 
   const ieee = selectedProject?.ieeeDetails || {};
-  const latestDraft = hasValidFile(ieee.latestDraft) ? ieee.latestDraft : null;
-  const previousDraft = hasValidFile(ieee.previousDraft) ? ieee.previousDraft : null;
-  const submissionProof = hasValidFile(ieee.submissionProof) ? ieee.submissionProof : null;
-  const acceptanceProof = hasValidFile(ieee.acceptanceProof) ? ieee.acceptanceProof : null;
-  const publicationProof = hasValidFile(ieee.publicationProof) ? ieee.publicationProof : null;
+  const latestDraft = normalizeFileObj(ieee.latestDraft);
+  const previousDraft = normalizeFileObj(ieee.previousDraft);
+  const submissionProof = normalizeFileObj(ieee.submissionProof);
+  const acceptanceProof = normalizeFileObj(ieee.acceptanceProof);
+  const publicationProof = normalizeFileObj(ieee.publicationProof);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '—';

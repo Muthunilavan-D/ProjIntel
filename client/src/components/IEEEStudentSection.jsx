@@ -25,14 +25,24 @@ import { getIeeeDetails, updateIeeeDetails, uploadIeeeDraft, uploadIeeeProof } f
 
 /** Helper to verify a document object has an actual uploaded file on the server */
 const hasValidFile = (fileObj) => {
-  return Boolean(
-    fileObj &&
-    typeof fileObj === 'object' &&
-    fileObj.filePath &&
-    typeof fileObj.filePath === 'string' &&
-    fileObj.filePath.trim().length > 0 &&
-    fileObj.filePath.trim() !== '#'
-  );
+  if (!fileObj || typeof fileObj !== 'object') return false;
+  const path = (fileObj.filePath || fileObj.url || fileObj.path || '').trim();
+  const name = (fileObj.fileName || fileObj.originalName || fileObj.name || '').trim();
+  return Boolean((path.length > 0 && path !== '#') || name.length > 0);
+};
+
+/** Normalize file object to ensure standard properties (fileName, originalName, filePath) exist */
+const normalizeFileObj = (fileObj, defaultFolder = 'ieee') => {
+  if (!hasValidFile(fileObj)) return null;
+  const fileName = (fileObj.fileName || fileObj.originalName || fileObj.name || '').trim();
+  const rawPath = (fileObj.filePath || fileObj.url || fileObj.path || '').trim();
+  const filePath = (rawPath && rawPath !== '#') ? rawPath : `/uploads/${defaultFolder}/${fileName}`;
+  return {
+    ...fileObj,
+    fileName: fileName || (filePath ? filePath.split(/[/\\]/).pop() : ''),
+    filePath,
+    originalName: fileObj.originalName || fileObj.name || fileName
+  };
 };
 
 /**
@@ -93,8 +103,14 @@ const IEEEStudentSection = ({
   const isEditingRef = useRef(false);
   const debounceTimerRef = useRef(null);
   const lastProjectIdRef = useRef(null);
+  const projectRef = useRef(project);
+  const lastUploadTimeRef = useRef(0);
 
-  // Sync state from project prop (guarded against overwriting active user edits)
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
+  // Sync state from project prop (guarded against race conditions and polling overwriting active user edits/uploads)
   useEffect(() => {
     if (project?.ieeeDetails) {
       const currentId = project._id || project.id;
@@ -113,13 +129,46 @@ const IEEEStudentSection = ({
         setIsPublished(!!details.isPublished);
       }
 
-      // Always keep drafts and proofs synchronized (only when a valid file is actually uploaded)
-      setLatestDraft(hasValidFile(details.latestDraft) ? details.latestDraft : null);
-      setPreviousDraft(hasValidFile(details.previousDraft) ? details.previousDraft : null);
+      const isRecentUpload = (Date.now() - lastUploadTimeRef.current) < 10000;
 
-      setSubmissionProof(hasValidFile(details.submissionProof) ? details.submissionProof : null);
-      setAcceptanceProof(hasValidFile(details.acceptanceProof) ? details.acceptanceProof : null);
-      setPublicationProof(hasValidFile(details.publicationProof) ? details.publicationProof : null);
+      if (isNewProject) {
+        setLatestDraft(normalizeFileObj(details.latestDraft));
+        setPreviousDraft(normalizeFileObj(details.previousDraft));
+        setSubmissionProof(normalizeFileObj(details.submissionProof));
+        setAcceptanceProof(normalizeFileObj(details.acceptanceProof));
+        setPublicationProof(normalizeFileObj(details.publicationProof));
+      } else {
+        // If incoming has a valid file, accept it. If not, preserve active local file to prevent race conditions.
+        if (hasValidFile(details.latestDraft)) {
+          setLatestDraft(normalizeFileObj(details.latestDraft));
+        } else if (!isRecentUpload && !latestDraft) {
+          setLatestDraft(null);
+        }
+
+        if (hasValidFile(details.previousDraft)) {
+          setPreviousDraft(normalizeFileObj(details.previousDraft));
+        } else if (!isRecentUpload && !previousDraft) {
+          setPreviousDraft(null);
+        }
+
+        if (hasValidFile(details.submissionProof)) {
+          setSubmissionProof(normalizeFileObj(details.submissionProof));
+        } else if (!isRecentUpload && !submissionProof) {
+          setSubmissionProof(null);
+        }
+
+        if (hasValidFile(details.acceptanceProof)) {
+          setAcceptanceProof(normalizeFileObj(details.acceptanceProof));
+        } else if (!isRecentUpload && !acceptanceProof) {
+          setAcceptanceProof(null);
+        }
+
+        if (hasValidFile(details.publicationProof)) {
+          setPublicationProof(normalizeFileObj(details.publicationProof));
+        } else if (!isRecentUpload && !publicationProof) {
+          setPublicationProof(null);
+        }
+      }
     }
   }, [project]);
 
@@ -139,16 +188,41 @@ const IEEEStudentSection = ({
           setIsAccepted(!!details.isAccepted);
           setIsPublished(!!details.isPublished);
 
-          setLatestDraft(hasValidFile(details.latestDraft) ? details.latestDraft : null);
-          setPreviousDraft(hasValidFile(details.previousDraft) ? details.previousDraft : null);
+          const isRecentUpload = (Date.now() - lastUploadTimeRef.current) < 10000;
 
-          setSubmissionProof(hasValidFile(details.submissionProof) ? details.submissionProof : null);
-          setAcceptanceProof(hasValidFile(details.acceptanceProof) ? details.acceptanceProof : null);
-          setPublicationProof(hasValidFile(details.publicationProof) ? details.publicationProof : null);
+          if (hasValidFile(details.latestDraft)) {
+            setLatestDraft(normalizeFileObj(details.latestDraft));
+          } else if (!isRecentUpload) {
+            setLatestDraft(null);
+          }
 
-          if (onUpdateProject && project) {
+          if (hasValidFile(details.previousDraft)) {
+            setPreviousDraft(normalizeFileObj(details.previousDraft));
+          } else if (!isRecentUpload) {
+            setPreviousDraft(null);
+          }
+
+          if (hasValidFile(details.submissionProof)) {
+            setSubmissionProof(normalizeFileObj(details.submissionProof));
+          } else if (!isRecentUpload) {
+            setSubmissionProof(null);
+          }
+
+          if (hasValidFile(details.acceptanceProof)) {
+            setAcceptanceProof(normalizeFileObj(details.acceptanceProof));
+          } else if (!isRecentUpload) {
+            setAcceptanceProof(null);
+          }
+
+          if (hasValidFile(details.publicationProof)) {
+            setPublicationProof(normalizeFileObj(details.publicationProof));
+          } else if (!isRecentUpload) {
+            setPublicationProof(null);
+          }
+
+          if (onUpdateProject && projectRef.current) {
             onUpdateProject({
-              ...project,
+              ...projectRef.current,
               ieeeDetails: details
             }, { silent: true, skipApi: true });
           }
@@ -185,9 +259,9 @@ const IEEEStudentSection = ({
     try {
       const res = await updateIeeeDetails(projectId, payload);
       if (res?.success && res?.data) {
-        if (onUpdateProject && project) {
+        if (onUpdateProject && projectRef.current) {
           onUpdateProject({
-            ...project,
+            ...projectRef.current,
             ieeeDetails: res.data
           }, { silent: true, skipApi: true });
         }
@@ -218,9 +292,9 @@ const IEEEStudentSection = ({
     try {
       const res = await updateIeeeDetails(projectId, updatedPayload);
       if (res?.success && res?.data) {
-        if (onUpdateProject && project) {
+        if (onUpdateProject && projectRef.current) {
           onUpdateProject({
-            ...project,
+            ...projectRef.current,
             ieeeDetails: res.data
           }, { silent: true, skipApi: true });
         }
@@ -284,11 +358,11 @@ const IEEEStudentSection = ({
       const res = await updateIeeeDetails(projectId, payload);
       if (res && res.success) {
         setSaveSuccessMessage('Details saved.');
-        if (onUpdateProject && project) {
+        if (onUpdateProject && projectRef.current) {
           onUpdateProject({
-            ...project,
+            ...projectRef.current,
             ieeeDetails: res.data
-          });
+          }, { silent: true, skipApi: true });
         }
       } else {
         throw new Error(res?.error || 'Failed to save IEEE details.');
@@ -296,7 +370,7 @@ const IEEEStudentSection = ({
     } catch (err) {
       console.warn('updateIeeeDetails error, updating local state:', err);
       const updatedIeee = {
-        ...(project?.ieeeDetails || {}),
+        ...(projectRef.current?.ieeeDetails || {}),
         ...payload,
         latestDraft,
         previousDraft,
@@ -305,11 +379,11 @@ const IEEEStudentSection = ({
         publicationProof,
         updatedAt: new Date().toISOString()
       };
-      if (onUpdateProject && project) {
+      if (onUpdateProject && projectRef.current) {
         onUpdateProject({
-          ...project,
+          ...projectRef.current,
           ieeeDetails: updatedIeee
-        });
+        }, { silent: true, skipApi: true });
       }
       setErrorMessage(err.message || 'Failed to save IEEE details.');
     } finally {
@@ -339,16 +413,20 @@ const IEEEStudentSection = ({
     formData.append('file', file);
 
     try {
+      lastUploadTimeRef.current = Date.now();
       const res = await uploadIeeeDraft(projectId, formData);
       if (res && res.success) {
-        setLatestDraft(hasValidFile(res.data.latestDraft) ? res.data.latestDraft : null);
-        setPreviousDraft(hasValidFile(res.data.previousDraft) ? res.data.previousDraft : null);
+        lastUploadTimeRef.current = Date.now();
+        const normLatest = normalizeFileObj(res.data.latestDraft);
+        const normPrev = normalizeFileObj(res.data.previousDraft);
+        setLatestDraft(normLatest);
+        if (normPrev) setPreviousDraft(normPrev);
         setSaveSuccessMessage('Draft uploaded.');
-        if (onUpdateProject && project) {
+        if (onUpdateProject && projectRef.current) {
           onUpdateProject({
-            ...project,
+            ...projectRef.current,
             ieeeDetails: res.data
-          });
+          }, { silent: true, skipApi: true });
         }
       } else {
         throw new Error(res?.error || 'Failed to upload draft.');
@@ -376,22 +454,24 @@ const IEEEStudentSection = ({
     formData.append('proofType', proofType);
 
     try {
+      lastUploadTimeRef.current = Date.now();
       const res = await uploadIeeeProof(projectId, formData);
       if (res && res.success) {
+        lastUploadTimeRef.current = Date.now();
         const d = res.data;
         if (proofType === 'submission') {
-          setSubmissionProof(hasValidFile(d.submissionProof) ? d.submissionProof : null);
+          setSubmissionProof(normalizeFileObj(d.submissionProof));
           setIsSubmitted(true);
         } else if (proofType === 'acceptance') {
-          setAcceptanceProof(hasValidFile(d.acceptanceProof) ? d.acceptanceProof : null);
+          setAcceptanceProof(normalizeFileObj(d.acceptanceProof));
           setIsAccepted(true);
         } else if (proofType === 'publication') {
-          setPublicationProof(hasValidFile(d.publicationProof) ? d.publicationProof : null);
+          setPublicationProof(normalizeFileObj(d.publicationProof));
           setIsPublished(true);
         }
         setSaveSuccessMessage('Proof uploaded.');
-        if (onUpdateProject && project) {
-          onUpdateProject({ ...project, ieeeDetails: d });
+        if (onUpdateProject && projectRef.current) {
+          onUpdateProject({ ...projectRef.current, ieeeDetails: d }, { silent: true, skipApi: true });
         }
       } else {
         throw new Error(res?.error || 'Failed to upload proof document.');

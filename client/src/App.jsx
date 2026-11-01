@@ -167,7 +167,33 @@ function App() {
             };
           }
         }));
-        setProjectsList(enriched);
+        setProjectsList(prev => {
+          return enriched.map(newP => {
+            const existing = prev.find(p => String(p._id || p.id) === String(newP._id || newP.id));
+            if (existing?.ieeeDetails) {
+              const existingTime = new Date(existing.ieeeDetails.updatedAt || 0).getTime();
+              const newTime = new Date(newP.ieeeDetails?.updatedAt || 0).getTime();
+              const existingHasFiles = Boolean(
+                existing.ieeeDetails.latestDraft?.fileName ||
+                existing.ieeeDetails.latestDraft?.filePath ||
+                existing.ieeeDetails.submissionProof?.fileName ||
+                existing.ieeeDetails.acceptanceProof?.fileName ||
+                existing.ieeeDetails.publicationProof?.fileName
+              );
+              const newHasFiles = Boolean(
+                newP.ieeeDetails?.latestDraft?.fileName ||
+                newP.ieeeDetails?.latestDraft?.filePath ||
+                newP.ieeeDetails?.submissionProof?.fileName ||
+                newP.ieeeDetails?.acceptanceProof?.fileName ||
+                newP.ieeeDetails?.publicationProof?.fileName
+              );
+              if (existingTime > newTime || (existingHasFiles && !newHasFiles)) {
+                return { ...newP, ieeeDetails: existing.ieeeDetails };
+              }
+            }
+            return newP;
+          });
+        });
       } else if (!loggedUser) {
         setProjectsList(clientMockProjects);
       } else {
@@ -491,9 +517,9 @@ function App() {
 
   const handleUpdateProject = async (updatedProj, options = {}) => {
     try {
-      const id = updatedProj._id || updatedProj.id;
+      const id = String(updatedProj._id || updatedProj.id || '');
       if (options?.skipApi) {
-        setProjectsList(prev => prev.map(p => (p.id === id || p._id === id) ? { ...p, ...updatedProj } : p));
+        setProjectsList(prev => prev.map(p => (String(p.id || p._id) === id) ? { ...p, ...updatedProj } : p));
         if (!options?.silent) {
           showToast('Project updated.');
         }
@@ -501,7 +527,7 @@ function App() {
       }
       const res = await apiUpdateProject(id, updatedProj);
       if (res.success) {
-        setProjectsList(prev => prev.map(p => (p.id === id || p._id === id) ? { ...p, ...updatedProj } : p));
+        setProjectsList(prev => prev.map(p => (String(p.id || p._id) === id) ? { ...p, ...updatedProj } : p));
         if (!options?.silent) {
           showToast('Project updated.');
         }
